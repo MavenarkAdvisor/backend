@@ -1,18 +1,18 @@
 const mongoose = require('mongoose');
 
 const cashflowSchema = new mongoose.Schema({
-    SubSecCode:String,
+    SecurityCode:String,
+    ISIN: Number,
     Date: Number,
-    Interest: String,
-    Principal:String,
-    Total:String,
+    Interest:Number,
+    Principal:Number,
+    Total:Number,
+    CouponRate:Number,
     DCB:Number,
-    RDDays:Number,
-    RDType:String,
 },
 {timestamps:true,
 require:true})
 
-const Cashflow = mongoose.model('cashflow', cashflowSchema);
+const Cashflow = mongoose.model('testCashflow', cashflowSchema);
 
 module.exports = Cashflow;
