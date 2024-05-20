@@ -2,12 +2,11 @@ const mongoose = require('mongoose');
 
 const cashflowSchema = new mongoose.Schema({
     SecurityCode:String,
-    ISIN: Number,
+    ISIN: String,
     Date: Number,
     Interest:Number,
     Principal:Number,
     Total:Number,
-    CouponRate:Number,
     DCB:Number,
 },
 {timestamps:true,
