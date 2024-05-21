@@ -5,6 +5,7 @@ const xlsx = require('xlsx');
 const cors = require('cors');
 const connectDB = require('./config/connectMongo')
 const CashflowModel = require('./model/cashflowModel')
+const SecurityDetails = require('./model/securityDetailsModel')
 
 // Enable CORS for all requests
 const app = express();
@@ -27,6 +28,22 @@ app.post('/cashflow', upload.single('file'), async (req, res) => {
 
     // Save the data to MongoDB
     await CashflowModel.insertMany(data);
+    res.status(200).json({ message: 'File uploaded successfully' });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+app.post('/securityDetails', upload.single('file'), async (req, res) => {
+  try {
+    const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const data = xlsx.utils.sheet_to_json(sheet);
+    console.log(data);
+
+    // Save the data to MongoDB
+    await SecurityDetails.insertMany(data);
     res.status(200).json({ message: 'File uploaded successfully' });
   } catch (error) {
     console.error(error);

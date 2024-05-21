@@ -1,18 +1,25 @@
 const mongoose = require('mongoose');
 
 const securityDetailsSchema = new mongoose.Schema({
+    SecurityCode:String,
     ISIN:String,
-    IssuerFullName:String,
     SecurityDescription:String,
-    AllotmentDate:Number,
+    AssetType:String,
+    IssuanceDate:Number,
     MaturityDate:Number,
-    CouponRate:String,
-    FrequencyValue:String,
-    FaceValue:String,
-    InterestType:String,
-    RecordDateDays:Number,
-    RecordDateType:String,
-    PrimaryYTM:String
+    CouponRate:Number,
+    CouponType:Number,
+    Frequency:String,
+    Maturity:String,
+    Seniority:String,
+    Security:String,
+    IssuerShortName:String,
+    IssuerFullName:String,
+    Sector:String,
+    Exchange:String,
+    RDDays:Number,
+    RDType:String,
+
 },
 {
     timestamps:true,
