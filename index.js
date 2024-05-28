@@ -795,7 +795,7 @@ app.post(
     //   result,
     // });
     res.json({
-      downloadUrl: `http://localhost:5000/download/${path.basename(
+      downloadUrl: `http://gplank-test-eb-frontend.ap-south-1.elasticbeanstalk.com/download/${path.basename(
         outputPath
       )}`,
     });
