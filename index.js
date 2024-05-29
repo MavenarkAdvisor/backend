@@ -56,7 +56,6 @@
 //   console.log(`Server is running on port ${PORT}`);
 // });
 
-
 require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
@@ -64,6 +63,7 @@ const utils = require("./utils");
 const xlsx = require("xlsx");
 const app = express();
 const path = require("path");
+const fs = require("fs");
 const cors = require("cors");
 const connectDB = require("./config/connectMongo");
 const cashflowModel = require("./model/cashflowModel");
@@ -96,7 +96,6 @@ app.post(
 
     const file1 = req.files["file1"][0];
     const file2 = req.files["file2"][0];
-    // const file3 = req.files["file3"][0];
 
     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
@@ -106,43 +105,50 @@ app.post(
     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
     const data2 = xlsx.utils.sheet_to_json(sheet2);
 
-    // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
-    // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
-    // const data3 = xlsx.utils.sheet_to_json(sheet3);
-
     const data = utils.joinDataArrays(data1, data2, "SecurityCode");
-
-    // Map over the data array and calculate the new field for each item
 
     const calculatedData = await Promise.all(
       data.map(async (item, index) => {
-        const ytm_value = item.CouponRate;
+        const YTM = item.CouponRate / 100;
 
-        const subsecCode = item.SecurityCode + "_" + ytm_value.toFixed(2);
+        const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
 
-        const prevCFDate = await utils.calculatePrevCFDate(
-          item,
-          index,
-          data,
-          settlement_date
-        );
+        const Interest = item.Interest / 100;
 
-        const StartDateForValue = await utils.calculateStartDateForValue(
-          item,
-          index,
-          data,
-          settlement_date
-        );
+        const Principal = item.Principal / 100;
+
+        const Total = item.Total / 100;
 
         return {
           ...item,
-          YTM: ytm_value,
-          PrevCfDate: prevCFDate,
-          SubSecCode: subsecCode,
-          StartDateForValue,
+          YTM,
+          SubSecCode,
+          Interest,
+          Principal,
+          Total,
         };
       })
     );
+
+    for (let index = 0; index < calculatedData.length; index++) {
+      const item = calculatedData[index];
+
+      const prevCFDate = await utils.calculatePrevCFDate(
+        item,
+        index,
+        calculatedData,
+        settlement_date
+      );
+      calculatedData[index].prevCFDate = prevCFDate;
+
+      const StartDateForValue = await utils.calculateStartDateForValue(
+        item,
+        index,
+        calculatedData,
+        settlement_date
+      );
+      calculatedData[index].StartDateForValue = StartDateForValue;
+    }
 
     // Calculate DF
     for (let index = 0; index < calculatedData.length; index++) {
@@ -173,11 +179,6 @@ app.post(
         settlement_date
       );
       calculatedData[index].PVForValuation = PVForValuation;
-
-      // calculatedData[index].PV = PVForValuation;
-
-      // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
-      // calculatedData[index].PV = PV;
 
       const PV = await utils.calculatePVMOdify(
         item,
@@ -217,33 +218,31 @@ app.post(
       const item = calculatedData[index];
     }
 
-    // const result = calculatedData.map((item, index) => {
-    //   return {
-    //     SubSecCode: item.SubSecCode,
-
-    //     SecCode: item.SecurityCode,
-    //     ISIN: item.ISIN,
-    //     Date: item.Date,
-    //     Interest: (item.Interest / 100).toFixed(2),
-    //     Principal: (item.Principal / 100).toFixed(2),
-    //     Total: (item.Total / 100).toFixed(2),
-    //     DCB: item.DCB,
-    //     YTM: item.YTM.toFixed(2),
-    //     StartDateForValue: item.StartDateForValue,
-    //     DFForValuation: item.DFForValuation,
-    //     PVForValuation: item.PVForValuation,
-    //     Weightage: item.Weightage,
-    //     Tenor: item.Tenor.toFixed(2),
-    //     MacaulayDuration:
-    //       item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
-    //     RDDays: item.RDDays,
-    //     RDType: item.RDType,
-    //     RecordDate: item.RecordDate,
-    //     StartDate: item.StartDate,
-    //     DF: item.DF,
-    //     PV: item.PV,
-    //   };
-    // });
+    const Redemption_Schedule = calculatedData.map((item, index) => {
+      return {
+        SubSecCode: item.SubSecCode,
+        SecCode: item.SecurityCode,
+        ISIN: item.ISIN,
+        Date: item.Date,
+        Interest: item.Interest,
+        Principal: item.Principal,
+        Total: item.Total,
+        DCB: item.DCB,
+        YTM: item.YTM,
+        StartDateForValue: item.StartDateForValue,
+        DFForValuation: item.DFForValuation,
+        PVForValuation: item.PVForValuation,
+        Weightage: item.Weightage,
+        Tenor: item.Tenor.toFixed(2),
+        MacaulayDuration: item.MacaulayDuration && item.MacaulayDuration,
+        RDDays: item.RDDays,
+        RDType: item.RDType,
+        RecordDate: item.RecordDate,
+        StartDate: item.StartDate,
+        DF: item.DF,
+        PV: item.PV,
+      };
+    });
 
     const result = await Promise.all(
       data2.map(async (item, index) => {
@@ -255,13 +254,16 @@ app.post(
         const faceValue = calculatedData.reduce((total, curr) => {
           return curr.SubSecCode === subsecCode &&
             utils.excelToJSDate(curr.Date) > settlement_date
-            ? curr.Principal / 100 + total
+            ? curr.Principal + total
             : total;
         }, 0.0);
+
+        const CouponRate = item.CouponRate / 100;
 
         let lipDate = new Date("0000-01-01");
         let nipDate = new Date("0000-01-01");
         let recordDate = new Date("0000-01-01");
+        let recordDate_date = new Date("0000-01-01");
 
         for (let index = 0; index < calculatedData.length; index++) {
           const item = calculatedData[index];
@@ -290,15 +292,12 @@ app.post(
 
           if (item.RecordDate) {
             const RecordDate = new Date(item.RecordDate);
-            if (
-              RecordDate > settlement_date &&
-              item.SubSecCode === subsecCode
-            ) {
-              // console.log(RecordDate);
-
-              if (recordDate < settlement_date) {
+            if (date > settlement_date && item.SubSecCode === subsecCode) {
+              if (recordDate_date < settlement_date) {
+                recordDate_date = date;
                 recordDate = RecordDate;
-              } else if (recordDate > RecordDate) {
+              } else if (recordDate_date > date) {
+                recordDate_date = date;
                 recordDate = RecordDate;
               }
             }
@@ -363,23 +362,15 @@ app.post(
 
         // console.log(intaccperday_daysDiff);
 
-        let intaccperday_a = (faceValue * item.CouponRate) / dcb;
+        let intaccperday_a = (faceValue * CouponRate) / dcb;
 
         let intaccperday_x = intaccperday_a * intaccperday_daysDiff;
 
         let intaccperday_y = intaccperday_a * (intaccperday_daysDiff - 1);
 
-        console.log(
-          faceValue,
-          item.CouponRate,
-          dcb,
-          intaccperday_a,
-          intaccperday_x,
-          intaccperday_y
-        );
-
         let intaccperday = intaccperday_a + intaccperday_x + intaccperday_y;
 
+        // console.log(intaccperday_a, intaccperday_x, intaccperday_y);
         //------------------------------------------------------
 
         // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
@@ -392,17 +383,13 @@ app.post(
 
         // calculate Int Acc per day for settlement-------------
         const intaccperdayforsettlement_daysDiff =
-          (settlement_date - lipDate) / (1000 * 60 * 60 * 24);
+          (settlement_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
 
         let intaccperdayforsettlement_a =
-          ((faceValue * item.CouponRate) / dcb) *
-          intaccperdayforsettlement_daysDiff;
+          ((faceValue * CouponRate) / dcb) * intaccperdayforsettlement_daysDiff;
 
         let intaccperdayforsettlement_b =
-          (Math.pow(
-            1 + item.CouponRate,
-            intaccperdayforsettlement_daysDiff / dcb
-          ) -
+          (Math.pow(1 + CouponRate, intaccperdayforsettlement_daysDiff / dcb) -
             1) *
           faceValue;
 
@@ -442,7 +429,7 @@ app.post(
 
         const FaceValueForValuation = calculatedData.reduce((total, curr) => {
           return curr.SubSecCode === subsecCode &&
-            curr.Date > FaceValueForValuation_valueDate
+            utils.excelToJSDate(curr.Date) > FaceValueForValuation_valueDate
             ? curr.Principal + total
             : total;
         }, 0.0);
@@ -489,12 +476,12 @@ app.post(
           (valueDate - LipDateForValuation) / (1000 * 60 * 60 * 24);
 
         const a =
-          ((FaceValueForValuation * item.CouponRate) / dcb) *
+          ((FaceValueForValuation * CouponRate) / dcb) *
           (intaccsincelipforvaluation_daysDiff + 1);
 
         // Calculate 'b'
         const b =
-          ((1 + item.CouponRate) **
+          ((1 + CouponRate) **
             ((intaccsincelipforvaluation_daysDiff + 1) / dcb) -
             1) *
           FaceValueForValuation;
@@ -527,10 +514,51 @@ app.post(
 
         //---------------------------------------------------------
 
-        // const PRDPrincipal = 0;
-        // if (recordDate > settlement_date) {
+        let PRDPrincipal = 0;
+        let PRDPrincipal_date = new Date("0000-01-01");
+        let PRDInterest = 0;
+        let PRDInterest_date = new Date("0000-01-01");
 
-        // }
+        for (let index = 0; index < calculatedData.length; index++) {
+          const item = calculatedData[index];
+          const date = utils.excelToJSDate(item.Date);
+
+          if (settlement_date > recordDate) {
+            if (date > settlement_date && item.SubSecCode === subsecCode) {
+              if (PRDPrincipal_date < settlement_date) {
+                PRDPrincipal_date = date;
+                PRDPrincipal = item.Principal;
+              } else if (PRDPrincipal_date > date) {
+                PRDPrincipal_date = date;
+                PRDPrincipal = item.Principal;
+              }
+            }
+          }
+
+          //---------------------------------------------------------------
+
+          if (settlement_date > recordDate) {
+            if (date > settlement_date && item.SubSecCode === subsecCode) {
+              if (PRDPrincipal_date < settlement_date) {
+                PRDInterest_date = date;
+                PRDInterest = item.Principal;
+              } else if (PRDPrincipal_date > date) {
+                PRDInterest_date = date;
+                PRDInterest = item.Principal;
+              }
+            }
+          }
+        }
+
+        const CleanPriceForPRDUnits = CleanPriceforValuation - PRDPrincipal;
+
+        const MacaulayDuration = calculatedData.reduce((total, curr) => {
+          return curr.SubSecCode === subsecCode && curr.PVForValuation
+            ? curr.MacaulayDuration + total
+            : total;
+        }, 0.0);
+
+        const ModifiedDuration = MacaulayDuration / (1 + ytm_value);
 
         return {
           SubSecCode: subsecCode,
@@ -541,7 +569,7 @@ app.post(
           SecurityName: item.SecurityDescription,
           YTM: ytm_value,
           FaceValue: faceValue,
-          CouponRate: item.CouponRate,
+          CouponRate,
           CouponType: item.CouponType,
           LIPDate: lipDate,
           NIPDate: nipDate,
@@ -561,12 +589,15 @@ app.post(
           PrincipalRedemptionSinceLIP,
           IntAccPerDayForValuation: intaccsincelipforvaluation,
           CleanPriceforValuation,
-          // ...item,
-          // PrevCfDate: prevCFDate,
-          // StartDateForValue,
+          PRDPrincipal,
+          PRDInterest,
+          CleanPriceForPRDUnits,
+          MacaulayDuration,
+          ModifiedDuration,
         };
       })
     );
+
     // const result = data2.map((item, index) => {
     //   return {
     //     // SubSecCode: item.SubSecCode,
@@ -603,26 +634,26 @@ app.post(
     const outputPath = path.join("uploads", "output.xlsx");
     xlsx.writeFile(newWorkbook, outputPath);
 
-    // Check if the file is generated
-    console.log("File generated successfully:", outputPath);
-
-    // Download the file
-    // res.download(outputPath);
-    // res.status(200).json({
-    //   redirectTo: `http://localhost:8080/download/${path.basename(outputPath)}`,
-    // });
-
+    res.download(outputPath, "output.xlsx", (err) => {
+      if (err) {
+        return res.status(500).json({ error: "Failed to download file" });
+      }
+      // Clean up the uploaded file and the generated Excel file after download
+      // fs.unlink(filePath, () => {});
+      fs.unlink(outputPath, () => {});
+    });
     // res.json({
     //   data: data.slice(0, 1),
     //   calculatedData: calculatedData.slice(0, 1),
+    //   Redemption_Schedule,
     //   result,
     // });
 
-    res.json({
-      downloadUrl: `http://localhost:8080/download/${path.basename(
-        outputPath
-      )}`,
-    });
+    // res.json({
+    //   downloadUrl: `http://localhost:8080/download/${path.basename(
+    //     outputPath
+    //   )}`,
+    // });
   }
 );
 
@@ -760,9 +791,9 @@ app.post(
         SecCode: item.SecurityCode,
         ISIN: item.ISIN,
         Date: item.Date,
-        Interest: (item.Interest / 100).toFixed(2),
-        Principal: (item.Principal / 100).toFixed(2),
-        Total: (item.Total / 100).toFixed(2),
+        Interest: (item.Interest / 100),
+        Principal: (item.Principal / 100),
+        Total: (item.Total / 100),
         DCB: item.DCB,
         YTM: item.YTM.toFixed(2),
         StartDateForValue: item.StartDateForValue,
@@ -771,7 +802,7 @@ app.post(
         Weightage: item.Weightage,
         Tenor: item.Tenor.toFixed(2),
         MacaulayDuration:
-          item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
+          item.MacaulayDuration && item.MacaulayDuration,
         RDDays: item.RDDays,
         RDType: item.RDType,
         RecordDate: item.RecordDate,
@@ -789,11 +820,6 @@ app.post(
     const outputPath = path.join("uploads", `\output.xlsx`);
     xlsx.writeFile(newWorkbook, outputPath);
 
-    // res.json({
-    //   data: data.slice(0, 1),
-    //   calculatedData: calculatedData.slice(0, 1),
-    //   result,
-    // });
     res.json({
       downloadUrl: `http://gplank-test-eb-backend.ap-south-1.elasticbeanstalk.com/download/${path.basename(
         outputPath
@@ -917,9 +943,6 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
   console.log("calculatedData: ", calculatedData);
 });
 
-// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
-//   const data = await utils.readExcelFile(req.file.buffer)
-// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

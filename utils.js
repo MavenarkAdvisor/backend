@@ -63,7 +63,9 @@ exports.calculateDFForValuation = async (
     return parseFloat(1).toFixed(16);
   }
 
-  const prevDFForValuation = data[index - 1].DFForValuation;
+  const prevDFForValuation = data[index - 1]?.DFForValuation
+    ? data[index - 1].DFForValuation
+    : 1.0;
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
   const YTM = parseFloat(item.YTM) / 100;
@@ -276,17 +278,16 @@ exports.calculatePrevCFDate = async (item, index, data, currentDate) => {
 };
 
 exports.calculateDF = async (item, index, data) => {
-  if (item.PrevCfDate == "") {
+  if (item.StartDate == "") {
     return parseFloat(1).toFixed(16);
   }
 
-  const prevDF = data[index - 1].DF;
+  const prevDF = data[index - 1]?.DF ? data[index - 1].DF : 1.0;
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-  const YTM = parseFloat(item.YTM) / 100;
   const daysToPrevCF =
-    (currentRowDate - item.PrevCfDate) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
+    (currentRowDate - item.StartDate) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-  const DF = prevDF * (1 / Math.pow(1 + YTM, daysToPrevCF / item.DCB));
+  const DF = prevDF * (1 / Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
   return DF;
 };
 
@@ -473,12 +474,6 @@ exports.findRecordDate = async (cashflowData, item) => {
   return null;
 };
 
-// exports.calculateSystemDate = async (item) =>{
-//     if (eod_pricemaster === true) {
-//       systemDate.setDate(systemDate.getDate() + 1);
-//     }
-//     return(systemDate.getTime());
-// }
 exports.calculatePriceMaster = async (item) => {
   if (eod_priceMaster === ture) {
     systemDate.setDate(systemDate.getDate() + 1);
