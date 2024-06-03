@@ -16,9 +16,7 @@ const subsecinfoModel = require("./model/subsecinfoModel");
 // const secInfoModel = require("./model/secInfoModel");
 
 // Enable CORS for all requests
-app.use(cors({
-  origin: "http://gplank-test-eb-frontend.ap-south-1.elasticbeanstalk.com/"
-}));
+app.use(cors());
 app.use(express.json());
 
 // Set up multer for file uploads
