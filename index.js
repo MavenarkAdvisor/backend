@@ -1,61 +1,3 @@
-// require('dotenv').config();
-// const express = require('express');
-// const multer = require('multer');
-// const xlsx = require('xlsx');
-// const cors = require('cors');
-// const connectDB = require('./config/connectMongo')
-// const CashflowModel = require('./model/cashflowModel')
-// const SecurityDetails = require('./model/securityDetailsModel')
-
-// // Enable CORS for all requests
-// const app = express();
-// app.use(cors());
-
-// // Set up multer for file uploads
-// const storage = multer.memoryStorage();
-// const upload = multer({ storage: storage });
-
-// // Connect to MongoDB
-// connectDB()
-
-// // Route to handle file uploads
-// app.post('/cashflow', upload.single('file'), async (req, res) => {
-//   try {
-//     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-//     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-//     const data = xlsx.utils.sheet_to_json(sheet);
-//     console.log(data);
-
-//     // Save the data to MongoDB
-//     await CashflowModel.insertMany(data);
-//     res.status(200).json({ message: 'File uploaded successfully' });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: 'Internal server error' });
-//   }
-// });
-
-// app.post('/securityDetails', upload.single('file'), async (req, res) => {
-//   try {
-//     const workbook = xlsx.read(req.file.buffer, { type: 'buffer' });
-//     const sheet = workbook.Sheets[workbook.SheetNames[0]];
-//     const data = xlsx.utils.sheet_to_json(sheet);
-//     console.log(data);
-
-//     // Save the data to MongoDB
-//     await SecurityDetails.insertMany(data);
-//     res.status(200).json({ message: 'File uploaded successfully' });
-//   } catch (error) {
-//     console.error(error);
-//     res.status(500).json({ error: 'Internal server error' });
-//   }
-// });
-
-// const PORT = process.env.PORT || 8080;
-// app.listen(PORT, () => {
-//   console.log(`Server is running on port ${PORT}`);
-// });
-
 require("dotenv").config();
 const express = require("express");
 const multer = require("multer");
@@ -68,11 +10,14 @@ const cors = require("cors");
 const connectDB = require("./config/connectMongo");
 const cashflowModel = require("./model/cashflowModel");
 const secDetailModel = require("./model/secDetailModel");
+const redemptionModel = require("./model/redemptionModel");
+const subsecinfoModel = require("./model/subsecinfoModel");
 // const transactionModel = require("./model/transactionModel");
 // const secInfoModel = require("./model/secInfoModel");
 
 // Enable CORS for all requests
 app.use(cors());
+app.use(express.json());
 
 // Set up multer for file uploads
 const storage = multer.memoryStorage();
@@ -81,6 +26,53 @@ const upload = multer({ storage: storage });
 // Connect to MongoDB
 connectDB();
 
+app.post("/download", async (req, res) => {
+  let { from, to } = req.body;
+  from = new Date(from);
+  to = new Date(to);
+
+  console.log(from, to);
+
+  const result = await subsecinfoModel.find(
+    {
+      SettlementDate: {
+        $gte: from,
+        $lte: to,
+      },
+    },
+    {
+      _id: 0,
+      __v: 0,
+      createdAt: 0,
+      updatedAt: 0,
+    }
+  );
+
+  const cleanResult = result.map((doc) =>
+    doc.toObject({ getters: true, virtuals: false })
+  );
+
+  if (cleanResult && !cleanResult.length) {
+    return res.status(404).json({ status: false });
+  }
+
+  const newWorkbook = xlsx.utils.book_new();
+  const newWorksheet = xlsx.utils.json_to_sheet(cleanResult);
+  xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+  // Save the new workbook
+  const outputPath = path.join("uploads", "output.xlsx");
+  xlsx.writeFile(newWorkbook, outputPath);
+
+  res.download(outputPath, "output.xlsx", (err) => {
+    if (err) {
+      return res.status(500).json({ error: "Failed to download file" });
+    }
+    // Clean up the uploaded file and the generated Excel file after download
+    fs.unlink(outputPath, () => {});
+  });
+});
+
 app.post(
   "/subsecinfo",
   upload.fields([
@@ -88,8 +80,10 @@ app.post(
     { name: "file2", maxCount: 1 },
   ]),
   async (req, res) => {
-    let { settlement_date } = req.body;
+    let { settlement_date, from, to } = req.body;
     settlement_date = new Date(settlement_date);
+    from = new Date(from);
+    to = new Date(to);
 
     const valueDate = new Date(settlement_date);
     valueDate.setDate(valueDate.getDate() - 1);
@@ -218,7 +212,7 @@ app.post(
       const item = calculatedData[index];
     }
 
-    const Redemption_Schedule = calculatedData.map((item, index) => {
+    const redemption = calculatedData.map((item, index) => {
       return {
         SubSecCode: item.SubSecCode,
         SecCode: item.SecurityCode,
@@ -243,6 +237,27 @@ app.post(
         PV: item.PV,
       };
     });
+
+    const duplicatesredemption = await Promise.all(
+      redemption.map(async (data, i) => {
+        const res = await redemptionModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniqueredemption = await Promise.all(
+      redemption.map(async (data, i) => {
+        if (!duplicatesredemption[i]) {
+          return data;
+        }
+      })
+    );
+    const updateduniqueredemption = uniqueredemption.filter((obj) => obj);
+
+    await redemptionModel.insertMany(updateduniqueredemption);
 
     const result = await Promise.all(
       data2.map(async (item, index) => {
@@ -359,8 +374,6 @@ app.post(
 
         const intaccperday_daysDiff =
           (settlement_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
-
-        // console.log(intaccperday_daysDiff);
 
         let intaccperday_a = (faceValue * CouponRate) / dcb;
 
@@ -598,33 +611,25 @@ app.post(
       })
     );
 
-    // const result = data2.map((item, index) => {
-    //   return {
-    //     // SubSecCode: item.SubSecCode,
+    const duplicatesresult = await Promise.all(
+      result.map(async (data, i) => {
+        const res = await subsecinfoModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
 
-    //     SecCode: item.SecurityCode,
-    //     ISIN: item.ISIN,
-    //     // Date: item.Date,
-    //     // Interest: (item.Interest / 100).toFixed(2),
-    //     // Principal: (item.Principal / 100).toFixed(2),
-    //     // Total: (item.Total / 100).toFixed(2),
-    //     // DCB: item.DCB,
-    //     // YTM: item.YTM.toFixed(2),
-    //     // StartDateForValue: item.StartDateForValue,
-    //     // DFForValuation: item.DFForValuation,
-    //     // PVForValuation: item.PVForValuation,
-    //     // Weightage: item.Weightage,
-    //     // Tenor: item.Tenor.toFixed(2),
-    //     // MacaulayDuration:
-    //     //   item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
-    //     // RDDays: item.RDDays,
-    //     // RDType: item.RDType,
-    //     // RecordDate: item.RecordDate,
-    //     // StartDate: item.StartDate,
-    //     // DF: item.DF,
-    //     // PV: item.PV,
-    //   };
-    // });
+    const uniqueresult = await Promise.all(
+      result.map(async (data, i) => {
+        if (!duplicatesresult[i]) {
+          return data;
+        }
+      })
+    );
+    const updateduniqueresult = uniqueresult.filter((obj) => obj);
+    await subsecinfoModel.insertMany(updateduniqueresult);
 
     const newWorkbook = xlsx.utils.book_new();
     const newWorksheet = xlsx.utils.json_to_sheet(result);
@@ -639,7 +644,6 @@ app.post(
         return res.status(500).json({ error: "Failed to download file" });
       }
       // Clean up the uploaded file and the generated Excel file after download
-      // fs.unlink(filePath, () => {});
       fs.unlink(outputPath, () => {});
     });
     // res.json({
@@ -647,12 +651,6 @@ app.post(
     //   calculatedData: calculatedData.slice(0, 1),
     //   Redemption_Schedule,
     //   result,
-    // });
-
-    // res.json({
-    //   downloadUrl: `http://localhost:8080/download/${path.basename(
-    //     outputPath
-    //   )}`,
     // });
   }
 );
@@ -664,12 +662,8 @@ app.post(
     { name: "file2", maxCount: 1 },
   ]),
   async (req, res) => {
-    let { settlement_date } = req.body;
-    settlement_date = new Date(settlement_date);
-
     const file1 = req.files["file1"][0];
     const file2 = req.files["file2"][0];
-    // const file3 = req.files["file3"][0];
 
     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
@@ -679,154 +673,230 @@ app.post(
     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
     const data2 = xlsx.utils.sheet_to_json(sheet2);
 
-    // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
-    // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
-    // const data3 = xlsx.utils.sheet_to_json(sheet3);
-
-    const data = utils.joinDataArrays(data1, data2, "SecurityCode");
-
-    // Map over the data array and calculate the new field for each item
-    const calculatedData = await Promise.all(
-      data.map(async (item, index) => {
-        const ytm_value = item.CouponRate;
-
-        const subsecCode = item.SecurityCode + "_" + ytm_value;
-
-        const prevCFDate = await utils.calculatePrevCFDate(
-          item,
-          index,
-          data,
-          settlement_date
-        );
-
-        const StartDateForValue = await utils.calculateStartDateForValue(
-          item,
-          index,
-          data,
-          settlement_date
-        );
-
-        return {
-          ...item,
-          YTM: ytm_value,
-          PrevCfDate: prevCFDate,
-          SubSecCode: subsecCode,
-          StartDateForValue,
-        };
+    const duplicates1 = await Promise.all(
+      data1.map(async (data, i) => {
+        const res = await cashflowModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
       })
     );
 
-    // Calculate DF
-    for (let index = 0; index < calculatedData.length; index++) {
-      const item = calculatedData[index];
+    const uniquedocs1 = await Promise.all(
+      data1.map(async (data, i) => {
+        if (!duplicates1[i]) {
+          return data;
+        }
+      })
+    );
+    const updateduniquedocs1 = uniquedocs1.filter((obj) => obj);
 
-      const StartDate = await utils.calculateStartDate(
-        item,
-        index,
-        data,
-        settlement_date
-      );
-      calculatedData[index].StartDate = StartDate;
+    await cashflowModel.insertMany(updateduniquedocs1);
 
-      const DF = await utils.calculateDF(item, index, calculatedData);
-      calculatedData[index].DF = parseFloat(DF).toFixed(16);
+    const duplicates2 = await Promise.all(
+      data2.map(async (data, i) => {
+        const res = await secDetailModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
 
-      const DFForValuation = await utils.calculateDFForValuation(
-        item,
-        index,
-        calculatedData,
-        settlement_date
-      );
-      calculatedData[index].DFForValuation =
-        parseFloat(DFForValuation).toFixed(16);
+    const uniquedocs2 = await Promise.all(
+      data2.map(async (data, i) => {
+        if (!duplicates2[i]) {
+          return data;
+        }
+      })
+    );
+    const updateduniquedocs2 = uniquedocs2.filter((obj) => obj);
 
-      const PVForValuation = await utils.calculatePVForValuation(
-        item,
-        settlement_date
-      );
-      calculatedData[index].PVForValuation = PVForValuation;
-
-      // calculatedData[index].PV = PVForValuation;
-
-      // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
-      // calculatedData[index].PV = PV;
-
-      const PV = await utils.calculatePVMOdify(
-        item,
-        index,
-        calculatedData,
-        settlement_date
-      );
-      calculatedData[index].PV = PV;
-    }
-
-    await utils.calculateWeightage(calculatedData); // calculating weightage
-
-    for (let index = 0; index < calculatedData.length; index++) {
-      const item = calculatedData[index];
-
-      const Tenor = await utils.calculateTenor(
-        item,
-        index,
-        calculatedData,
-        settlement_date
-      );
-      calculatedData[index].Tenor = Tenor;
-
-      const MacaulayDuration = await utils.calculateMacaulayDuration(item);
-      calculatedData[index].MacaulayDuration = MacaulayDuration;
-
-      if (MacaulayDuration === "") {
-        calculatedData[index].RDDays = "";
-        calculatedData[index].RDType = "";
-      }
-
-      const recordDate = await utils.calculateRecordDateModify(item);
-      calculatedData[index].RecordDate = recordDate;
-    }
-
-    const result = calculatedData.map((item, index) => {
-      return {
-        SubSecCode: item.SubSecCode,
-        SecCode: item.SecurityCode,
-        ISIN: item.ISIN,
-        Date: item.Date,
-        Interest: (item.Interest / 100),
-        Principal: (item.Principal / 100),
-        Total: (item.Total / 100),
-        DCB: item.DCB,
-        YTM: item.YTM.toFixed(2),
-        StartDateForValue: item.StartDateForValue,
-        DFForValuation: item.DFForValuation,
-        PVForValuation: item.PVForValuation,
-        Weightage: item.Weightage,
-        Tenor: item.Tenor.toFixed(2),
-        MacaulayDuration:
-          item.MacaulayDuration && item.MacaulayDuration,
-        RDDays: item.RDDays,
-        RDType: item.RDType,
-        RecordDate: item.RecordDate,
-        StartDate: item.StartDate,
-        DF: item.DF,
-        PV: item.PV,
-      };
-    });
-
-    const newWorkbook = xlsx.utils.book_new();
-    const newWorksheet = xlsx.utils.json_to_sheet(result);
-    xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
-
-    // Save the new workbook
-    const outputPath = path.join("uploads", `\output.xlsx`);
-    xlsx.writeFile(newWorkbook, outputPath);
+    await secDetailModel.insertMany(updateduniquedocs2);
 
     res.json({
-      downloadUrl: `http://gplank-test-eb-backend.ap-south-1.elasticbeanstalk.com/download/${path.basename(
-        outputPath
-      )}`,
+      status: true,
+      message: "Upload Successfully",
     });
   }
 );
+
+// app.post(
+//   "/upload",
+//   upload.fields([
+//     { name: "file1", maxCount: 1 },
+//     { name: "file2", maxCount: 1 },
+//   ]),
+//   async (req, res) => {
+//     let { settlement_date } = req.body;
+//     settlement_date = new Date(settlement_date);
+
+//     const file1 = req.files["file1"][0];
+//     const file2 = req.files["file2"][0];
+//     // const file3 = req.files["file3"][0];
+
+//     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
+//     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
+//     const data1 = xlsx.utils.sheet_to_json(sheet1);
+
+//     const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
+//     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
+//     const data2 = xlsx.utils.sheet_to_json(sheet2);
+
+//     // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
+//     // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
+//     // const data3 = xlsx.utils.sheet_to_json(sheet3);
+
+//     const data = utils.joinDataArrays(data1, data2, "SecurityCode");
+
+//     // Map over the data array and calculate the new field for each item
+//     const calculatedData = await Promise.all(
+//       data.map(async (item, index) => {
+//         const ytm_value = item.CouponRate;
+
+//         const subsecCode = item.SecurityCode + "_" + ytm_value;
+
+//         const prevCFDate = await utils.calculatePrevCFDate(
+//           item,
+//           index,
+//           data,
+//           settlement_date
+//         );
+
+//         const StartDateForValue = await utils.calculateStartDateForValue(
+//           item,
+//           index,
+//           data,
+//           settlement_date
+//         );
+
+//         return {
+//           ...item,
+//           YTM: ytm_value,
+//           PrevCfDate: prevCFDate,
+//           SubSecCode: subsecCode,
+//           StartDateForValue,
+//         };
+//       })
+//     );
+
+//     // Calculate DF
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const StartDate = await utils.calculateStartDate(
+//         item,
+//         index,
+//         data,
+//         settlement_date
+//       );
+//       calculatedData[index].StartDate = StartDate;
+
+//       const DF = await utils.calculateDF(item, index, calculatedData);
+//       calculatedData[index].DF = parseFloat(DF).toFixed(16);
+
+//       const DFForValuation = await utils.calculateDFForValuation(
+//         item,
+//         index,
+//         calculatedData,
+//         settlement_date
+//       );
+//       calculatedData[index].DFForValuation =
+//         parseFloat(DFForValuation).toFixed(16);
+
+//       const PVForValuation = await utils.calculatePVForValuation(
+//         item,
+//         settlement_date
+//       );
+//       calculatedData[index].PVForValuation = PVForValuation;
+
+//       // calculatedData[index].PV = PVForValuation;
+
+//       // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
+//       // calculatedData[index].PV = PV;
+
+//       const PV = await utils.calculatePVMOdify(
+//         item,
+//         index,
+//         calculatedData,
+//         settlement_date
+//       );
+//       calculatedData[index].PV = PV;
+//     }
+
+//     await utils.calculateWeightage(calculatedData); // calculating weightage
+
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const Tenor = await utils.calculateTenor(
+//         item,
+//         index,
+//         calculatedData,
+//         settlement_date
+//       );
+//       calculatedData[index].Tenor = Tenor;
+
+//       const MacaulayDuration = await utils.calculateMacaulayDuration(item);
+//       calculatedData[index].MacaulayDuration = MacaulayDuration;
+
+//       if (MacaulayDuration === "") {
+//         calculatedData[index].RDDays = "";
+//         calculatedData[index].RDType = "";
+//       }
+
+//       const recordDate = await utils.calculateRecordDateModify(item);
+//       calculatedData[index].RecordDate = recordDate;
+//     }
+
+//     const result = calculatedData.map((item, index) => {
+//       return {
+//         SubSecCode: item.SubSecCode,
+//         SecCode: item.SecurityCode,
+//         ISIN: item.ISIN,
+//         Date: item.Date,
+//         Interest: (item.Interest / 100).toFixed(2),
+//         Principal: (item.Principal / 100).toFixed(2),
+//         Total: (item.Total / 100).toFixed(2),
+//         DCB: item.DCB,
+//         YTM: item.YTM.toFixed(2),
+//         StartDateForValue: item.StartDateForValue,
+//         DFForValuation: item.DFForValuation,
+//         PVForValuation: item.PVForValuation,
+//         Weightage: item.Weightage,
+//         Tenor: item.Tenor.toFixed(2),
+//         MacaulayDuration:
+//           item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
+//         RDDays: item.RDDays,
+//         RDType: item.RDType,
+//         RecordDate: item.RecordDate,
+//         StartDate: item.StartDate,
+//         DF: item.DF,
+//         PV: item.PV,
+//       };
+//     });
+
+//     const newWorkbook = xlsx.utils.book_new();
+//     const newWorksheet = xlsx.utils.json_to_sheet(result);
+//     xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+//     // Save the new workbook
+//     const outputPath = path.join("uploads", `\output.xlsx`);
+//     xlsx.writeFile(newWorkbook, outputPath);
+
+//     // res.json({
+//     //   data: data.slice(0, 1),
+//     //   calculatedData: calculatedData.slice(0, 1),
+//     //   result,
+//     // });
+//     res.json({
+//       downloadUrl: `http://localhost:5000/download/${path.basename(
+//         outputPath
+//       )}`,
+//     });
+//   }
+// );
 
 app.get("/download/:filename", (req, res) => {
   const filename = req.params.filename;
@@ -943,6 +1013,9 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
   console.log("calculatedData: ", calculatedData);
 });
 
+// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
+//   const data = await utils.readExcelFile(req.file.buffer)
+// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

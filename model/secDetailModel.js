@@ -1,30 +1,29 @@
-const mongoose = require('mongoose');
+const mongoose = require("mongoose");
 
-const secDetailSchema = new mongoose.Schema({
-    secCode:String,
-    ISIN:String,
-    secName:String,
-    SecurityDescription:String,
-    AllotmentDate:Number,
-    MaturityDate:Number,
-    CallDate:Number,
-    PutDate:Number,
-    CouponRate:Number,
-    FrequencyValue:Number,
-    FrequencyName:String,
-    FaceValue:Number,
-    CouponType:String,
-    RecordDateDays:Number,
-    RecordDateType:String,
-    PrimaryYTM:Number,
-},
-{timestamps:true,
-require:true})
+const secDetailSchema = new mongoose.Schema(
+  {
+    SecurityCode: String,
+    ISIN: String,
+    SecurityDescription: String,
+    AssetType: String,
+    IssuanceDate: Number,
+    MaturityDate: Number,
+    CouponRate: Number,
+    CouponType: String,
+    Frequency: String,
+    Maturity: String,
+    Seniority: String,
+    Security: String,
+    IssuerShortName: String,
+    IssuerFullName: String,
+    Sector: String,
+    Exchange: String,
+    RDDays: Number,
+    RDType: String,
+  },
+  { timestamps: true, require: true }
+);
 
-const secDetail = mongoose.model('secDetail', secDetailSchema);
+const secDetail = mongoose.model("secDetail", secDetailSchema);
 
 module.exports = secDetail;
-
-
-
-

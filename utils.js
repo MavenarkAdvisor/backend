@@ -474,6 +474,12 @@ exports.findRecordDate = async (cashflowData, item) => {
   return null;
 };
 
+// exports.calculateSystemDate = async (item) =>{
+//     if (eod_pricemaster === true) {
+//       systemDate.setDate(systemDate.getDate() + 1);
+//     }
+//     return(systemDate.getTime());
+// }
 exports.calculatePriceMaster = async (item) => {
   if (eod_priceMaster === ture) {
     systemDate.setDate(systemDate.getDate() + 1);
