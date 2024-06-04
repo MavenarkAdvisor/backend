@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const systemDateSchema = new mongoose.Schema({
-    settlementDate:Number
+    settlementDate:Number,
+    valueDate:Number
 },
 {timestamps:true,
 require:true})
