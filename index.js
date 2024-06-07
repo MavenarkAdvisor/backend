@@ -389,9 +389,12 @@ app.post(
 
           let intaccperday_y = intaccperday_a * (intaccperday_daysDiff - 1);
 
-          let intaccperday = intaccperday_a + intaccperday_x + intaccperday_y;
+          let intaccperday = Math.max(
+            intaccperday_a,
+            intaccperday_x,
+            intaccperday_y
+          );
 
-          // console.log(intaccperday_a, intaccperday_x, intaccperday_y);
           //------------------------------------------------------
 
           // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
@@ -609,9 +612,9 @@ app.post(
             NIPDateForSettlement: nipdateforsettlement,
             LIPDateForSettlement: lipdateforsettlement,
             DCB: dcb,
-            IntAccPerDay: intaccperday,
+            IntAccPerDay: intaccperday.toFixed(2),
             DirtyPriceForSettlement,
-            IntAccPerDayForSettlement: intaccperdayforsettlement,
+            IntAccPerDayForSettlement: intaccperdayforsettlement.toFixed(2),
             CleanPriceforSettlement,
             Priceper100,
             FaceValueForValuation,
