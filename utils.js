@@ -224,26 +224,6 @@ exports.calculatePVMOdify = async (item, index, data, settlement_date) => {
   } else {
     return parseFloat(item.Total) * parseFloat(item.DF);
   }
-
-  // try {
-  //   let a;
-  //   if (item.StartDate === "") {
-  //     a = "";
-  //   } else {
-  //     a = item.Total * item.DF;
-  //   }
-
-  //   let result;
-  //   if (settlement_date > item.RecordDate) {
-  //     result = a - item.Total;
-  //   } else {
-  //     result = a;
-  //   }
-
-  //   return result;
-  // } catch (error) {
-  //   return "";
-  // }
 };
 
 // exports.CalculateIntAccPerDay = async () => {

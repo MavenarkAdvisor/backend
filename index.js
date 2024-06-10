@@ -62,22 +62,6 @@ app.post("/download", async (req, res) => {
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
-
-  // const newWorkbook = xlsx.utils.book_new();
-  // const newWorksheet = xlsx.utils.json_to_sheet(cleanResult);
-  // xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
-
-  // Save the new workbook
-  // const outputPath = path.join("uploads", "output.xlsx");
-  // xlsx.writeFile(newWorkbook, outputPath);
-
-  // res.download(outputPath, "output.xlsx", (err) => {
-  //   if (err) {
-  //     return res.status(500).json({ error: "Failed to download file" });
-  //   }
-  //   // Clean up the uploaded file and the generated Excel file after download
-  //   fs.unlink(outputPath, () => {});
-  // });
 });
 
 app.post(
@@ -115,11 +99,11 @@ app.post(
 
           const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
 
-          const Interest = item.Interest / 100;
+          const Interest = item.Interest;
 
-          const Principal = item.Principal / 100;
+          const Principal = item.Principal;
 
-          const Total = item.Total / 100;
+          const Total = item.Total;
 
           return {
             ...item,
@@ -165,7 +149,7 @@ app.post(
         calculatedData[index].StartDate = StartDate;
 
         const DF = await utils.calculateDF(item, index, calculatedData);
-        calculatedData[index].DF = parseFloat(DF).toFixed(16);
+        calculatedData[index].DF = parseFloat(DF);
 
         const DFForValuation = await utils.calculateDFForValuation(
           item,
@@ -235,7 +219,7 @@ app.post(
           DFForValuation: item.DFForValuation,
           PVForValuation: item.PVForValuation,
           Weightage: item.Weightage,
-          Tenor: item.Tenor.toFixed(2),
+          Tenor: item.Tenor,
           MacaulayDuration: item.MacaulayDuration && item.MacaulayDuration,
           RDDays: item.RDDays,
           RDType: item.RDType,
@@ -436,7 +420,7 @@ app.post(
           let CleanPriceforSettlement_a =
             DirtyPriceForSettlement - intaccperdayforsettlement;
 
-          // Check the condition and round accordingly
+          // Check the condition 
           if (CleanPriceforSettlement_a < 100) {
             CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
           } else {
@@ -450,7 +434,7 @@ app.post(
 
           // Round the result to 4 decimal places
           const Priceper100 =
-            Math.round(Priceper100_percentage * 10000) / 10000;
+          Math.round(Priceper100_percentage * 10000) / 10000;
 
           // ---------------------------------------------------------------
 
@@ -493,7 +477,8 @@ app.post(
               LipDateForValuation = date;
             }
           }
-
+          //-------------------------------------------------------------
+          //Calculate DirtyPriceForValuation 
           const DirtyPriceForValuation = calculatedData.reduce(
             (total, curr) => {
               return curr.SubSecCode === subsecCode && curr.PVForValuation
@@ -502,6 +487,7 @@ app.post(
             },
             0.0
           );
+          //---------------------------------------------------------------
 
           const PrincipalRedemptionSinceLIP = FaceValueForValuation - faceValue;
 
@@ -540,11 +526,11 @@ app.post(
             PrincipalRedemptionSinceLIP -
             intaccsincelipforvaluation;
 
-          // Check the condition and round accordingly
+          // Check the condition 
           if (CleanPriceforValuation_a < 100) {
-            CleanPriceforValuation = Math.round(CleanPriceforValuation_a, 4);
+            CleanPriceforValuation = CleanPriceforValuation_a;
           } else {
-            CleanPriceforValuation = Math.round(CleanPriceforValuation_a, 2);
+            CleanPriceforValuation = CleanPriceforValuation_a;
           }
 
           //---------------------------------------------------------
@@ -612,9 +598,9 @@ app.post(
             NIPDateForSettlement: nipdateforsettlement,
             LIPDateForSettlement: lipdateforsettlement,
             DCB: dcb,
-            IntAccPerDay: intaccperday.toFixed(2),
+            IntAccPerDay: intaccperday,
             DirtyPriceForSettlement,
-            IntAccPerDayForSettlement: intaccperdayforsettlement.toFixed(2),
+            IntAccPerDayForSettlement: intaccperdayforsettlement,
             CleanPriceforSettlement,
             Priceper100,
             FaceValueForValuation,
@@ -762,182 +748,6 @@ app.post(
   }
 );
 
-// app.post(
-//   "/upload",
-//   upload.fields([
-//     { name: "file1", maxCount: 1 },
-//     { name: "file2", maxCount: 1 },
-//   ]),
-//   async (req, res) => {
-//     let { settlement_date } = req.body;
-//     settlement_date = new Date(settlement_date);
-
-//     const file1 = req.files["file1"][0];
-//     const file2 = req.files["file2"][0];
-//     // const file3 = req.files["file3"][0];
-
-//     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
-//     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
-//     const data1 = xlsx.utils.sheet_to_json(sheet1);
-
-//     const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
-//     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
-//     const data2 = xlsx.utils.sheet_to_json(sheet2);
-
-//     // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
-//     // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
-//     // const data3 = xlsx.utils.sheet_to_json(sheet3);
-
-//     const data = utils.joinDataArrays(data1, data2, "SecurityCode");
-
-//     // Map over the data array and calculate the new field for each item
-//     const calculatedData = await Promise.all(
-//       data.map(async (item, index) => {
-//         const ytm_value = item.CouponRate;
-
-//         const subsecCode = item.SecurityCode + "_" + ytm_value;
-
-//         const prevCFDate = await utils.calculatePrevCFDate(
-//           item,
-//           index,
-//           data,
-//           settlement_date
-//         );
-
-//         const StartDateForValue = await utils.calculateStartDateForValue(
-//           item,
-//           index,
-//           data,
-//           settlement_date
-//         );
-
-//         return {
-//           ...item,
-//           YTM: ytm_value,
-//           PrevCfDate: prevCFDate,
-//           SubSecCode: subsecCode,
-//           StartDateForValue,
-//         };
-//       })
-//     );
-
-//     // Calculate DF
-//     for (let index = 0; index < calculatedData.length; index++) {
-//       const item = calculatedData[index];
-
-//       const StartDate = await utils.calculateStartDate(
-//         item,
-//         index,
-//         data,
-//         settlement_date
-//       );
-//       calculatedData[index].StartDate = StartDate;
-
-//       const DF = await utils.calculateDF(item, index, calculatedData);
-//       calculatedData[index].DF = parseFloat(DF).toFixed(16);
-
-//       const DFForValuation = await utils.calculateDFForValuation(
-//         item,
-//         index,
-//         calculatedData,
-//         settlement_date
-//       );
-//       calculatedData[index].DFForValuation =
-//         parseFloat(DFForValuation).toFixed(16);
-
-//       const PVForValuation = await utils.calculatePVForValuation(
-//         item,
-//         settlement_date
-//       );
-//       calculatedData[index].PVForValuation = PVForValuation;
-
-//       // calculatedData[index].PV = PVForValuation;
-
-//       // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
-//       // calculatedData[index].PV = PV;
-
-//       const PV = await utils.calculatePVMOdify(
-//         item,
-//         index,
-//         calculatedData,
-//         settlement_date
-//       );
-//       calculatedData[index].PV = PV;
-//     }
-
-//     await utils.calculateWeightage(calculatedData); // calculating weightage
-
-//     for (let index = 0; index < calculatedData.length; index++) {
-//       const item = calculatedData[index];
-
-//       const Tenor = await utils.calculateTenor(
-//         item,
-//         index,
-//         calculatedData,
-//         settlement_date
-//       );
-//       calculatedData[index].Tenor = Tenor;
-
-//       const MacaulayDuration = await utils.calculateMacaulayDuration(item);
-//       calculatedData[index].MacaulayDuration = MacaulayDuration;
-
-//       if (MacaulayDuration === "") {
-//         calculatedData[index].RDDays = "";
-//         calculatedData[index].RDType = "";
-//       }
-
-//       const recordDate = await utils.calculateRecordDateModify(item);
-//       calculatedData[index].RecordDate = recordDate;
-//     }
-
-//     const result = calculatedData.map((item, index) => {
-//       return {
-//         SubSecCode: item.SubSecCode,
-//         SecCode: item.SecurityCode,
-//         ISIN: item.ISIN,
-//         Date: item.Date,
-//         Interest: (item.Interest / 100).toFixed(2),
-//         Principal: (item.Principal / 100).toFixed(2),
-//         Total: (item.Total / 100).toFixed(2),
-//         DCB: item.DCB,
-//         YTM: item.YTM.toFixed(2),
-//         StartDateForValue: item.StartDateForValue,
-//         DFForValuation: item.DFForValuation,
-//         PVForValuation: item.PVForValuation,
-//         Weightage: item.Weightage,
-//         Tenor: item.Tenor.toFixed(2),
-//         MacaulayDuration:
-//           item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
-//         RDDays: item.RDDays,
-//         RDType: item.RDType,
-//         RecordDate: item.RecordDate,
-//         StartDate: item.StartDate,
-//         DF: item.DF,
-//         PV: item.PV,
-//       };
-//     });
-
-//     const newWorkbook = xlsx.utils.book_new();
-//     const newWorksheet = xlsx.utils.json_to_sheet(result);
-//     xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
-
-//     // Save the new workbook
-//     const outputPath = path.join("uploads", `\output.xlsx`);
-//     xlsx.writeFile(newWorkbook, outputPath);
-
-//     // res.json({
-//     //   data: data.slice(0, 1),
-//     //   calculatedData: calculatedData.slice(0, 1),
-//     //   result,
-//     // });
-//     res.json({
-//       downloadUrl: `http://localhost:5000/download/${path.basename(
-//         outputPath
-//       )}`,
-//     });
-//   }
-// );
-
 app.get("/download/:filename", (req, res) => {
   const filename = req.params.filename;
   const filePath = path.join(__dirname, "uploads", filename);
@@ -983,7 +793,7 @@ app.post("/cashflow", upload.single("file"), async (req, res) => {
     for (let index = 0; index < calculatedData.length; index++) {
       const item = calculatedData[index];
       const yrs = await utils.calculateYrs(item, index, calculatedData);
-      calculatedData[index].Yrs = parseFloat(yrs).toFixed(2);
+      calculatedData[index].Yrs = parseFloat(yrs);
 
       const duration = await utils.calculateDuration(item);
       calculatedData[index].Duration = duration ? duration : "";
@@ -1052,10 +862,6 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
 
   console.log("calculatedData: ", calculatedData);
 });
-
-// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
-//   const data = await utils.readExcelFile(req.file.buffer)
-// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
