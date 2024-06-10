@@ -116,8 +116,8 @@ exports.calculateTenor = async (
   // Calculate Weightage for each item
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-  const prevPrevRowDate = calculatedData[index - 2]?.Date
-    ? new Date((calculatedData[index - 2].Date - 25569) * 86400 * 1000)
+  const currRowStartDate = calculatedData[index]?.StartDate
+    ? new Date(calculatedData[index].StartDate)
     : 1;
 
   const valueDate = new Date(settlement_date);
@@ -127,10 +127,10 @@ exports.calculateTenor = async (
     ? calculatedData[index - 1].Tenor
     : 0.0;
 
-  const daysDiff = (currentRowDate - prevPrevRowDate) / (1000 * 60 * 60 * 24);
+  const daysDiff = (currentRowDate - currRowStartDate) / (1000 * 60 * 60 * 24);
 
   if (item.Total < 0 || valueDate > currentRowDate) {
-    return 0;
+    return 0.0;
   } else {
     return prevTenor + daysDiff / item.DCB;
   }
@@ -224,6 +224,26 @@ exports.calculatePVMOdify = async (item, index, data, settlement_date) => {
   } else {
     return parseFloat(item.Total) * parseFloat(item.DF);
   }
+
+  // try {
+  //   let a;
+  //   if (item.StartDate === "") {
+  //     a = "";
+  //   } else {
+  //     a = item.Total * item.DF;
+  //   }
+
+  //   let result;
+  //   if (settlement_date > item.RecordDate) {
+  //     result = a - item.Total;
+  //   } else {
+  //     result = a;
+  //   }
+
+  //   return result;
+  // } catch (error) {
+  //   return "";
+  // }
 };
 
 // exports.CalculateIntAccPerDay = async () => {
