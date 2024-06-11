@@ -77,7 +77,7 @@ exports.calculateDFForValuation = async (
     return 1;
   } else {
     return (
-      prevDFForValuation * (1 / Math.pow(1 + YTM, daysToPrevCF / item.DCB))
+      prevDFForValuation / (Math.pow(1 + YTM, daysToPrevCF / item.DCB))
     );
   }
 };
@@ -288,7 +288,7 @@ exports.calculateDF = async (item, index, data) => {
   const daysToPrevCF =
     (currentRowDate - item.StartDate) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-  const DF = prevDF / (1 / Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
+  const DF = prevDF / (Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
   return DF;
 };
 
