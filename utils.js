@@ -49,7 +49,8 @@ exports.calculateStartDateForValue = async (
   if (item.Total < 0 || currentRowDate <= valueDate) {
     return "";
   } else {
-    return settlement_date > prevDate ? settlement_date : prevDate;
+    // return settlement_date > prevDate ? settlement_date : prevDate;
+    return Math.max(settlement_date, prevDate);
   }
 };
 
@@ -287,7 +288,7 @@ exports.calculateDF = async (item, index, data) => {
   const daysToPrevCF =
     (currentRowDate - item.StartDate) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-  const DF = prevDF * (1 / Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
+  const DF = prevDF / (1 / Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
   return DF;
 };
 
