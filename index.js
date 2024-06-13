@@ -455,9 +455,11 @@ app.post(
 
           // Check the condition and round accordingly
           if (CleanPriceforSettlement_a < 100) {
-            CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
+            // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
+            CleanPriceforSettlement = parseFloat(CleanPriceforSettlement_a.toFixed(4));
           } else {
-            CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
+            CleanPriceforSettlement = parseFloat(CleanPriceforSettlement_a.toFixed(2));
+            // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
           }
 
           //---------------------------------------------------------------
@@ -559,9 +561,12 @@ app.post(
 
           // Check the condition and round accordingly
           if (CleanPriceforValuation_a < 100) {
-            CleanPriceforValuation = CleanPriceforValuation_a;
+            // CleanPriceforValuation = CleanPriceforValuation_a;
+            CleanPriceforValuation = parseFloat(CleanPriceforValuation_a.toFixed(4));
+
           } else {
-            CleanPriceforValuation = CleanPriceforValuation_a;
+            CleanPriceforValuation = parseFloat(CleanPriceforValuation_a.toFixed(2));
+            // CleanPriceforValuation = CleanPriceforValuation_a;
           }
 
           //---------------------------------------------------------
