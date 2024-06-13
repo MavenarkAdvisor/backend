@@ -49,8 +49,7 @@ exports.calculateStartDateForValue = async (
   if (item.Total < 0 || currentRowDate <= valueDate) {
     return "";
   } else {
-    // return settlement_date > prevDate ? settlement_date : prevDate;
-    return Math.max(settlement_date, prevDate);
+    return settlement_date > prevDate ? settlement_date : prevDate;
   }
 };
 
@@ -66,19 +65,17 @@ exports.calculateDFForValuation = async (
 
   const prevDFForValuation = data[index - 1]?.DFForValuation
     ? data[index - 1].DFForValuation
-    : 1.0;
+    : 1.00;
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-  const YTM = parseFloat(item.YTM) / 100;
+  const YTM = parseFloat(item.YTM);
   const daysToPrevCF =
     (currentRowDate - item.StartDateForValue) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
   if (item.Total < 0 || settlement_date > currentRowDate) {
-    return 1;
+    return 1.00;
   } else {
-    return (
-      prevDFForValuation / (Math.pow(1 + YTM, daysToPrevCF / item.DCB))
-    );
+    return prevDFForValuation / Math.pow(1 + YTM, daysToPrevCF / item.DCB);
   }
 };
 
@@ -117,8 +114,8 @@ exports.calculateTenor = async (
   // Calculate Weightage for each item
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-  const currRowStartDate = calculatedData[index]?.StartDate
-    ? new Date(calculatedData[index].StartDate)
+  const currRowStartDate = calculatedData[index]?.StartDateForValue
+    ? new Date(calculatedData[index].StartDateForValue)
     : 1;
 
   const valueDate = new Date(settlement_date);
@@ -288,7 +285,7 @@ exports.calculateDF = async (item, index, data) => {
   const daysToPrevCF =
     (currentRowDate - item.StartDate) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-  const DF = prevDF / (Math.pow(1 + item.YTM, daysToPrevCF / item.DCB));
+  const DF = prevDF / Math.pow(1 + item.YTM, daysToPrevCF / item.DCB);
   return DF;
 };
 
@@ -336,7 +333,7 @@ exports.calculateWeightage = async (calculatedData) => {
     item.Weightage =
       item.PVForValuation === "" || sumPV === 0
         ? ""
-        : ((item.PVForValuation / sumPV) * 100).toFixed(2) + "%";
+        : ((item.PVForValuation / sumPV) * 100) + "%";
   });
 
   return calculatedData;
