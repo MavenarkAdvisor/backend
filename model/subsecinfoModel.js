@@ -4,7 +4,7 @@ const subsecinfoSchema = new mongoose.Schema(
   {
     SubSecCode: String,
     ValuationDate: Date,
-    SettlementDate: Date,
+    SystemDate: Date,
     SecCode: String,
     ISIN: String,
     SecurityName: String,

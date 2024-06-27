@@ -37,7 +37,7 @@ app.post("/download", async (req, res) => {
 
     const result = await subsecinfoModel.find(
       {
-        SettlementDate: {
+        SystemDate: {
           $gte: from,
           $lte: to,
         },
@@ -85,19 +85,21 @@ app.post(
   upload.fields([
     { name: "file1", maxCount: 1 },
     { name: "file2", maxCount: 1 },
+    { name: "file3", maxCount: 1 },
   ]),
   async (req, res) => {
     try {
-      let { settlement_date, from, to } = req.body;
-      settlement_date = new Date(settlement_date);
+      let { system_date, from, to } = req.body;
+      system_date = new Date(system_date);
       from = new Date(from);
       to = new Date(to);
 
-      const valueDate = new Date(settlement_date);
+      const valueDate = new Date(system_date);
       valueDate.setDate(valueDate.getDate() - 1);
 
       const file1 = req.files["file1"][0];
       const file2 = req.files["file2"][0];
+      const file3 = req.files["file3"][0];
 
       const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
       const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
@@ -107,11 +109,252 @@ app.post(
       const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
       const data2 = xlsx.utils.sheet_to_json(sheet2);
 
+      const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
+      const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
+      const data3 = xlsx.utils.sheet_to_json(sheet3);
+
       const data = utils.joinDataArrays(data1, data2, "SecurityCode");
+
+      console.log("System Date", system_date);
+
+      const stockmaster = await Promise.all(
+        data3.map(async (item, index) => {
+          let {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+          } = item;
+
+          TradeDate = utils.excelToJSDate(TradeDate);
+          SettlementDate = utils.excelToJSDate(SettlementDate);
+
+          let YTM = 0.0;
+
+          if (
+            SecurityCode === "AYEFINSR3" &&
+            new Date(system_date).toString() ===
+              new Date(SettlementDate).toString()
+          ) {
+            console.log(SecurityCode, SettlementDate);
+            let filterarray = data.filter(
+              (obj) =>
+                obj.SecurityCode === SecurityCode &&
+                utils.excelToJSDate(obj.Date) > SettlementDate
+            );
+            if (InterestPerUnit < 0) {
+              filterarray = filterarray.slice(1);
+            }
+
+            const maparray = filterarray.map((obj) => {
+              return {
+                Date: utils.excelToJSDate(obj.Date),
+                Total: obj.Total,
+                DCB: obj.DCB,
+              };
+            });
+
+            let ytmarray = [
+              {
+                Date: SettlementDate,
+                Total: (Rate + InterestPerUnit) * -1,
+                DF: 1.0,
+              },
+              ...maparray,
+            ];
+
+            console.log("ytmarray", ytmarray);
+
+            let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
+
+            let defaultInitialYTM = 0.01;
+            let defaultYTMdifferential = 0.01;
+            let i = 0;
+            do {
+              // console.log(ytmvalues);
+              const InitialYTM = defaultInitialYTM;
+
+              ytmvalues[i].InitialYTM = InitialYTM;
+
+              const YTMdifferential = defaultYTMdifferential;
+
+              ytmvalues[i].YTMdifferential = YTMdifferential;
+
+              console.log("InitialYTM", InitialYTM);
+
+              for (let index = 0; index < ytmarray.length; index++) {
+                const item = ytmarray[index];
+
+                if (index > 0) {
+                  const dayDiff =
+                    (ytmarray[index].Date - ytmarray[index - 1].Date) /
+                    (1000 * 60 * 60 * 24);
+                  ytmarray[index].DF =
+                    item.DCB === ""
+                      ? 0
+                      : ytmarray[index - 1].DF /
+                        Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+                }
+
+                ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
+              }
+              // console.log("ytmarray", ytmarray);
+
+              const OldDifference = ytmarray.reduce(
+                (accumulator, currentobj) => accumulator + currentobj.PV,
+                0
+              );
+
+              console.log("OldDifference", OldDifference);
+
+              ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(2));
+
+              const AdjustedYTMDifferential =
+                OldDifference < 0
+                  ? ytmvalues[i].YTMdifferential * -1
+                  : ytmvalues[i].YTMdifferential;
+              ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
+
+              ytmvalues[i].ModifiedYTM =
+                ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
+
+              const ModifiedYTM = ytmvalues[i].ModifiedYTM;
+
+              console.log("ModifiedYTM", ModifiedYTM);
+
+              for (let index = 0; index < ytmarray.length; index++) {
+                const item = ytmarray[index];
+
+                if (index > 0) {
+                  const dayDiff =
+                    (ytmarray[index].Date - ytmarray[index - 1].Date) /
+                    (1000 * 60 * 60 * 24);
+
+                  ytmarray[index].DF =
+                    item.DCB === ""
+                      ? 0
+                      : ytmarray[index - 1].DF /
+                        Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+                }
+
+                ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
+              }
+              // console.log("ytmarray Modify", ytmarray);
+
+              const NewDifference = ytmarray.reduce(
+                (accumulator, currentobj) => accumulator + currentobj.PV,
+                0
+              );
+
+              console.log("NewDifference", NewDifference);
+
+              ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(2));
+
+              const ChangeInYTM =
+                OldDifference > 0 === NewDifference > 0
+                  ? ModifiedYTM - InitialYTM
+                  : "NA";
+
+              ytmvalues[i].ChangeInYTM = ChangeInYTM;
+
+              const ChangeInDiff =
+                ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
+
+              ytmvalues[i].ChangeInDiff = ChangeInDiff;
+
+              const RequiredChangeInDiff =
+                ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
+
+              ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
+
+              const RequiredChangeYTM =
+                ChangeInYTM === "NA"
+                  ? "NA"
+                  : isNaN(ChangeInDiff) || ChangeInDiff === 0
+                  ? 0
+                  : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+
+              ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
+
+              const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
+              const EndYTMv2 =
+                RequiredChangeYTM === "NA"
+                  ? InitialYTM
+                  : InitialYTM + RequiredChangeYTM;
+              const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
+
+              console.log("EndYTM", EndYTM);
+              ytmvalues[i].EndYTM = EndYTM;
+
+              defaultInitialYTM = EndYTM;
+
+              const SumOfTotal = ytmarray.reduce(
+                (accumulator, currentobj) => accumulator + currentobj.Total,
+                0
+              );
+              if (ChangeInDiff === "NA") {
+                defaultYTMdifferential = YTMdifferential / 2;
+              } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
+                defaultYTMdifferential = YTMdifferential;
+              } else if (Math.abs(ChangeInDiff) < 0.1) {
+                defaultYTMdifferential = YTMdifferential / 10;
+              } else {
+                defaultYTMdifferential = YTMdifferential;
+              }
+
+              ytmvalues.push({ InitialYTM: EndYTM });
+              // console.log("EndYTM", EndYTM);
+              // console.log("ytmvalues", ytmvalues);
+
+              i++;
+            } while (
+              ytmvalues[i - 1].OldDifference > 0 &&
+              ytmvalues[i - 1].NewDifference > 0
+            );
+
+            if (ytmvalues[i - 1].OldDifference <= 0) {
+              YTM = ytmvalues[i - 1].InitialYTM;
+            } else if (ytmvalues[i - 1].NewDifference <= 0) {
+              YTM = ytmvalues[i - 1].ModifiedYTM;
+            }
+
+            console.log("ytmvalues", ytmvalues);
+            console.log("YTM", YTM);
+            if (SecurityCode === "AYEFINSR3") {
+              return res.json({ status: true, data: ytmvalues });
+            }
+          }
+
+          const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+
+          return {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            YTM,
+            SucuritySubCode,
+          };
+        })
+      );
 
       const calculatedData = await Promise.all(
         data.map(async (item, index) => {
           const YTM = item.CouponRate / 100;
+
+          // const YTM = await utils.calculateYTM(item, index, data, system_date);
 
           const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
 
@@ -132,6 +375,7 @@ app.post(
         })
       );
 
+      // console.log(calculatedData[0]);
       for (let index = 0; index < calculatedData.length; index++) {
         const item = calculatedData[index];
 
@@ -139,7 +383,7 @@ app.post(
           item,
           index,
           calculatedData,
-          settlement_date
+          system_date
         );
         calculatedData[index].prevCFDate = prevCFDate;
 
@@ -147,7 +391,7 @@ app.post(
           item,
           index,
           calculatedData,
-          settlement_date
+          system_date
         );
         calculatedData[index].StartDateForValue = StartDateForValue;
       }
@@ -160,7 +404,7 @@ app.post(
           item,
           index,
           data,
-          settlement_date
+          system_date
         );
         calculatedData[index].StartDate = StartDate;
 
@@ -171,14 +415,14 @@ app.post(
           item,
           index,
           calculatedData,
-          settlement_date
+          system_date
         );
         calculatedData[index].DFForValuation =
           parseFloat(DFForValuation).toFixed(16);
 
         const PVForValuation = await utils.calculatePVForValuation(
           item,
-          settlement_date
+          system_date
         );
         calculatedData[index].PVForValuation = PVForValuation;
 
@@ -186,7 +430,7 @@ app.post(
           item,
           index,
           calculatedData,
-          settlement_date
+          system_date
         );
         calculatedData[index].PV = PV;
       }
@@ -200,7 +444,7 @@ app.post(
           item,
           index,
           calculatedData,
-          settlement_date
+          system_date
         );
         // console.log(Tenor);
         calculatedData[index].Tenor = Tenor;
@@ -268,16 +512,145 @@ app.post(
 
       await redemptionModel.insertMany(updateduniqueredemption);
 
+      const stockmaster1 = await Promise.all(
+        stockmaster.map(async (item, index) => {
+          let {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+          } = item;
+
+          TradeDate = utils.excelToJSDate(TradeDate);
+          SettlementDate = utils.excelToJSDate(SettlementDate);
+
+          let ytmDate = new Date("0000-01-01");
+          let YTM = 0.0;
+          let FaceValuePerUnit = 0;
+          for (let index = 0; index < redemption.length; index++) {
+            const item = redemption[index];
+            const date = utils.excelToJSDate(item.Date);
+
+            if (
+              date <= SettlementDate &&
+              ytmDate < date &&
+              item.SecCode === SecurityCode
+            ) {
+              ytmDate = date;
+              YTM = item.YTM;
+            }
+
+            if (date > SettlementDate && item.SecCode === SecurityCode) {
+              FaceValuePerUnit += item.Principal;
+            }
+          }
+
+          const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+
+          const FaceValue =
+            EventType === "FI_RED"
+              ? Quantity * Rate
+              : Quantity * FaceValuePerUnit;
+
+          const CleanConsideration = Quantity * Rate;
+
+          const Amortisation = CleanConsideration - FaceValue;
+
+          const InterestAccrued = Quantity * InterestPerUnit;
+
+          const DirtyConsideration = CleanConsideration + InterestAccrued;
+
+          let TransactionNRD = "NA";
+          let recordDate_date = new Date("0000-01-01");
+
+          if (EventType !== "FI_RED") {
+            for (let index = 0; index < redemption.length; index++) {
+              const item = redemption[index];
+              const date = utils.excelToJSDate(item.Date);
+
+              if (item.RecordDate) {
+                const RecordDate = new Date(item.RecordDate);
+                if (
+                  date > SettlementDate &&
+                  item.SubSecCode === SucuritySubCode
+                ) {
+                  if (recordDate_date < SettlementDate) {
+                    recordDate_date = date;
+                    TransactionNRD = RecordDate;
+                  } else if (recordDate_date > date) {
+                    recordDate_date = date;
+                    TransactionNRD = RecordDate;
+                  }
+                }
+              }
+            }
+          }
+
+          const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
+
+          let NextDueDate = new Date("0000-01-01");
+
+          for (let index = 0; index < redemption.length; index++) {
+            const item = redemption[index];
+            const date = utils.excelToJSDate(item.Date);
+
+            if (date > SettlementDate && item.SubSecCode === SucuritySubCode) {
+              if (NextDueDate < SettlementDate) {
+                NextDueDate = date;
+              } else if (NextDueDate > date) {
+                NextDueDate = date;
+              }
+            }
+          }
+
+          const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
+
+          return {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            SucuritySubCode,
+            YTM,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            FaceValuePerUnit,
+            FaceValue,
+            Amortisation,
+            CleanConsideration,
+            InterestAccrued,
+            DirtyConsideration,
+            TransactionNRD,
+            PRDFlag,
+            NextDueDate,
+            PRDHolding,
+          };
+        })
+      );
+      // console.log(stockmaster1[0]);
+
       const result = await Promise.all(
         data2.map(async (item, index) => {
           const ytm_value = item.CouponRate / 100;
+
+          // console.log(item.SecurityCode);
 
           const subsecCode =
             item.SecurityCode + "_" + (ytm_value * 100).toFixed(2);
 
           const faceValue = calculatedData.reduce((total, curr) => {
             return curr.SubSecCode === subsecCode &&
-              utils.excelToJSDate(curr.Date) > settlement_date
+              utils.excelToJSDate(curr.Date) > system_date
               ? curr.Principal + total
               : total;
           }, 0.0);
@@ -302,22 +675,22 @@ app.post(
               lipDate = date;
             }
 
-            // nip date - filter exact and next larger date [redempltion] from settlement_date [current]
+            // nip date - filter exact and next larger date [redempltion] from system_date [current]
 
-            if (date > settlement_date && item.SubSecCode === subsecCode) {
-              if (nipDate < settlement_date) {
+            if (date > system_date && item.SubSecCode === subsecCode) {
+              if (nipDate < system_date) {
                 nipDate = date;
               } else if (nipDate > date) {
                 nipDate = date;
               }
             }
 
-            // recorddate - filter exact and next larger RecordDate [redempltion] from settlement_date [current]
+            // recorddate - filter exact and next larger RecordDate [redempltion] from system_date [current]
 
             if (item.RecordDate) {
               const RecordDate = new Date(item.RecordDate);
-              if (date > settlement_date && item.SubSecCode === subsecCode) {
-                if (recordDate_date < settlement_date) {
+              if (date > system_date && item.SubSecCode === subsecCode) {
+                if (recordDate_date < system_date) {
                   recordDate_date = date;
                   recordDate = RecordDate;
                 } else if (recordDate_date > date) {
@@ -334,7 +707,7 @@ app.post(
             const item = calculatedData[index];
             const date = utils.excelToJSDate(item.Date);
 
-            if (settlement_date > recordDate) {
+            if (system_date > recordDate) {
               // nipdateforsettlement : filter exact and next larger Date [redempltion] than nipdate [current]
               if (date > nipDate && item.SubSecCode === subsecCode) {
                 if (nipdateforsettlement < nipDate) {
@@ -368,8 +741,8 @@ app.post(
 
             // dcb - find dbc from redemption which have exact and next large date [redempltion] than settlement date [current]
 
-            if (date >= settlement_date && item.SubSecCode === subsecCode) {
-              if (dcbdate < settlement_date) {
+            if (date >= system_date && item.SubSecCode === subsecCode) {
+              if (dcbdate < system_date) {
                 dcbdate = date;
                 dcb = item.DCB;
               } else if (dcbdate > date) {
@@ -382,7 +755,7 @@ app.post(
           // calculate Int Acc per day ---------------------------------
 
           const intaccperday_daysDiff =
-            (settlement_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
+            (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
 
           let intaccperday_a = (faceValue * CouponRate) / dcb;
 
@@ -403,11 +776,11 @@ app.post(
 
           let intaccperday =
             item.CouponType === "S"
-              ? settlement_date === lipdateforsettlement
+              ? system_date === lipdateforsettlement
                 ? intaccperday_a
                 : intaccperday_x - intaccperday_y
               : item.CouponType === "C"
-              ? settlement_date === lipdateforsettlement
+              ? system_date === lipdateforsettlement
                 ? intaccperday_d
                 : intaccperday_b - intaccperday_c
               : "NA";
@@ -427,7 +800,7 @@ app.post(
 
           // calculate Int Acc per day for settlement-------------
           const intaccperdayforsettlement_daysDiff =
-            (settlement_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
+            (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
 
           let intaccperdayforsettlement_a =
             ((faceValue * CouponRate) / dcb) *
@@ -456,9 +829,13 @@ app.post(
           // Check the condition and round accordingly
           if (CleanPriceforSettlement_a < 100) {
             // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
-            CleanPriceforSettlement = parseFloat(CleanPriceforSettlement_a.toFixed(4));
+            CleanPriceforSettlement = parseFloat(
+              CleanPriceforSettlement_a.toFixed(4)
+            );
           } else {
-            CleanPriceforSettlement = parseFloat(CleanPriceforSettlement_a.toFixed(2));
+            CleanPriceforSettlement = parseFloat(
+              CleanPriceforSettlement_a.toFixed(2)
+            );
             // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
           }
 
@@ -473,7 +850,7 @@ app.post(
 
           // ---------------------------------------------------------------
 
-          const FaceValueForValuation_valueDate = new Date(settlement_date);
+          const FaceValueForValuation_valueDate = new Date(system_date);
           FaceValueForValuation_valueDate.setDate(
             FaceValueForValuation_valueDate.getDate() - 1
           );
@@ -562,10 +939,13 @@ app.post(
           // Check the condition and round accordingly
           if (CleanPriceforValuation_a < 100) {
             // CleanPriceforValuation = CleanPriceforValuation_a;
-            CleanPriceforValuation = parseFloat(CleanPriceforValuation_a.toFixed(4));
-
+            CleanPriceforValuation = parseFloat(
+              CleanPriceforValuation_a.toFixed(4)
+            );
           } else {
-            CleanPriceforValuation = parseFloat(CleanPriceforValuation_a.toFixed(2));
+            CleanPriceforValuation = parseFloat(
+              CleanPriceforValuation_a.toFixed(2)
+            );
             // CleanPriceforValuation = CleanPriceforValuation_a;
           }
 
@@ -580,9 +960,9 @@ app.post(
             const item = calculatedData[index];
             const date = utils.excelToJSDate(item.Date);
 
-            if (settlement_date > recordDate) {
-              if (date > settlement_date && item.SubSecCode === subsecCode) {
-                if (PRDPrincipal_date < settlement_date) {
+            if (system_date > recordDate) {
+              if (date > system_date && item.SubSecCode === subsecCode) {
+                if (PRDPrincipal_date < system_date) {
                   PRDPrincipal_date = date;
                   PRDPrincipal = item.Principal;
                 } else if (PRDPrincipal_date > date) {
@@ -594,9 +974,9 @@ app.post(
 
             //---------------------------------------------------------------
 
-            if (settlement_date > recordDate) {
-              if (date > settlement_date && item.SubSecCode === subsecCode) {
-                if (PRDPrincipal_date < settlement_date) {
+            if (system_date > recordDate) {
+              if (date > system_date && item.SubSecCode === subsecCode) {
+                if (PRDPrincipal_date < system_date) {
                   PRDInterest_date = date;
                   PRDInterest = item.Principal;
                 } else if (PRDPrincipal_date > date) {
@@ -620,7 +1000,7 @@ app.post(
           return {
             SubSecCode: subsecCode,
             ValuationDate: valueDate,
-            SettlementDate: settlement_date,
+            SystemDate: system_date,
             SecCode: item.SecurityCode,
             ISIN: item.ISIN,
             SecurityName: item.SecurityDescription,
@@ -678,17 +1058,17 @@ app.post(
 
       await systemDateModel.findOneAndUpdate(
         {
-          SettlementDate: settlement_date,
+          SystemDate: system_date,
           ValuationDate: valueDate,
         },
         {
-          SettlementDate: settlement_date,
+          SystemDate: system_date,
           ValuationDate: valueDate,
         },
         { upsert: true, new: true }
       );
 
-      res.json({ status: true, data: result });
+      res.json({ status: true, data: stockmaster });
     } catch (error) {
       console.log(error);
       res.status(500).json({ status: false, message: error.message });
@@ -792,8 +1172,8 @@ app.post(
 //     { name: "file2", maxCount: 1 },
 //   ]),
 //   async (req, res) => {
-//     let { settlement_date } = req.body;
-//     settlement_date = new Date(settlement_date);
+//     let { system_date } = req.body;
+//     system_date = new Date(system_date);
 
 //     const file1 = req.files["file1"][0];
 //     const file2 = req.files["file2"][0];
@@ -824,14 +1204,14 @@ app.post(
 //           item,
 //           index,
 //           data,
-//           settlement_date
+//           system_date
 //         );
 
 //         const StartDateForValue = await utils.calculateStartDateForValue(
 //           item,
 //           index,
 //           data,
-//           settlement_date
+//           system_date
 //         );
 
 //         return {
@@ -852,7 +1232,7 @@ app.post(
 //         item,
 //         index,
 //         data,
-//         settlement_date
+//         system_date
 //       );
 //       calculatedData[index].StartDate = StartDate;
 
@@ -863,14 +1243,14 @@ app.post(
 //         item,
 //         index,
 //         calculatedData,
-//         settlement_date
+//         system_date
 //       );
 //       calculatedData[index].DFForValuation =
 //         parseFloat(DFForValuation).toFixed(16);
 
 //       const PVForValuation = await utils.calculatePVForValuation(
 //         item,
-//         settlement_date
+//         system_date
 //       );
 //       calculatedData[index].PVForValuation = PVForValuation;
 
@@ -883,7 +1263,7 @@ app.post(
 //         item,
 //         index,
 //         calculatedData,
-//         settlement_date
+//         system_date
 //       );
 //       calculatedData[index].PV = PV;
 //     }
@@ -897,7 +1277,7 @@ app.post(
 //         item,
 //         index,
 //         calculatedData,
-//         settlement_date
+//         system_date
 //       );
 //       calculatedData[index].Tenor = Tenor;
 
@@ -969,7 +1349,7 @@ app.get("/download/:filename", (req, res) => {
 
 app.post("/cashflow", upload.single("file"), async (req, res) => {
   try {
-    const { settlement_date } = req.body;
+    const { system_date } = req.body;
     const data = await utils.readExcelFile(req.file.buffer);
 
     // Map over the data array and calculate the new field for each item
@@ -980,7 +1360,7 @@ app.post("/cashflow", upload.single("file"), async (req, res) => {
           item,
           index,
           data,
-          settlement_date
+          system_date
         );
 
         return { ...item, YTM: ytm_value, PrevCfDate: prevCFDate };
