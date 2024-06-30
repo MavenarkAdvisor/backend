@@ -138,11 +138,9 @@ app.post(
           let YTM = 0.0;
 
           if (
-            SecurityCode === "AYEFINSR3" &&
             new Date(system_date).toString() ===
-              new Date(SettlementDate).toString()
+            new Date(SettlementDate).toString()
           ) {
-            console.log(SecurityCode, SettlementDate);
             let filterarray = data.filter(
               (obj) =>
                 obj.SecurityCode === SecurityCode &&
@@ -169,7 +167,7 @@ app.post(
               ...maparray,
             ];
 
-            console.log("ytmarray", ytmarray);
+            // console.log("ytmarray", ytmarray);
 
             let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
 
@@ -186,7 +184,7 @@ app.post(
 
               ytmvalues[i].YTMdifferential = YTMdifferential;
 
-              console.log("InitialYTM", InitialYTM);
+              // console.log("InitialYTM", InitialYTM);
 
               for (let index = 0; index < ytmarray.length; index++) {
                 const item = ytmarray[index];
@@ -211,7 +209,7 @@ app.post(
                 0
               );
 
-              console.log("OldDifference", OldDifference);
+              // console.log("OldDifference", OldDifference);
 
               ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(2));
 
@@ -226,7 +224,7 @@ app.post(
 
               const ModifiedYTM = ytmvalues[i].ModifiedYTM;
 
-              console.log("ModifiedYTM", ModifiedYTM);
+              // console.log("ModifiedYTM", ModifiedYTM);
 
               for (let index = 0; index < ytmarray.length; index++) {
                 const item = ytmarray[index];
@@ -252,7 +250,7 @@ app.post(
                 0
               );
 
-              console.log("NewDifference", NewDifference);
+              // console.log("NewDifference", NewDifference);
 
               ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(2));
 
@@ -289,7 +287,7 @@ app.post(
                   : InitialYTM + RequiredChangeYTM;
               const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
 
-              console.log("EndYTM", EndYTM);
+              // console.log("EndYTM", EndYTM);
               ytmvalues[i].EndYTM = EndYTM;
 
               defaultInitialYTM = EndYTM;
@@ -324,11 +322,11 @@ app.post(
               YTM = ytmvalues[i - 1].ModifiedYTM;
             }
 
-            console.log("ytmvalues", ytmvalues);
-            console.log("YTM", YTM);
-            if (SecurityCode === "AYEFINSR3") {
-              return res.json({ status: true, data: ytmvalues });
-            }
+            // console.log("ytmvalues", ytmvalues);
+            // console.log("YTM", YTM);
+            // if (SecurityCode === "AYEFINSR3") {
+            //   return res.json({ status: true, data: ytmvalues });
+            // }
           }
 
           const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
@@ -350,9 +348,17 @@ app.post(
         })
       );
 
+      console.log("stockmaster", stockmaster);
+
+      // return res.json({ status: true, data: stockmaster });
+
       const calculatedData = await Promise.all(
         data.map(async (item, index) => {
-          const YTM = item.CouponRate / 100;
+          const ytmvalues = stockmaster.filter(
+            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+          );
+
+          const YTM = ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
 
           // const YTM = await utils.calculateYTM(item, index, data, system_date);
 
@@ -374,6 +380,8 @@ app.post(
           };
         })
       );
+
+      console.log(calculatedData[0]);
 
       // console.log(calculatedData[0]);
       for (let index = 0; index < calculatedData.length; index++) {
@@ -491,6 +499,8 @@ app.post(
         };
       });
 
+      // return res.json({ status: true, data: redemption });
+
       const duplicatesredemption = await Promise.all(
         redemption.map(async (data, i) => {
           const res = await redemptionModel.findOne(data);
@@ -512,136 +522,16 @@ app.post(
 
       await redemptionModel.insertMany(updateduniqueredemption);
 
-      const stockmaster1 = await Promise.all(
-        stockmaster.map(async (item, index) => {
-          let {
-            ClientCode,
-            ClientName,
-            EventType,
-            TradeDate,
-            SettlementDate,
-            SecurityCode,
-            Quantity,
-            Rate,
-            InterestPerUnit,
-            StampDuty,
-          } = item;
-
-          TradeDate = utils.excelToJSDate(TradeDate);
-          SettlementDate = utils.excelToJSDate(SettlementDate);
-
-          let ytmDate = new Date("0000-01-01");
-          let YTM = 0.0;
-          let FaceValuePerUnit = 0;
-          for (let index = 0; index < redemption.length; index++) {
-            const item = redemption[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            if (
-              date <= SettlementDate &&
-              ytmDate < date &&
-              item.SecCode === SecurityCode
-            ) {
-              ytmDate = date;
-              YTM = item.YTM;
-            }
-
-            if (date > SettlementDate && item.SecCode === SecurityCode) {
-              FaceValuePerUnit += item.Principal;
-            }
-          }
-
-          const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
-
-          const FaceValue =
-            EventType === "FI_RED"
-              ? Quantity * Rate
-              : Quantity * FaceValuePerUnit;
-
-          const CleanConsideration = Quantity * Rate;
-
-          const Amortisation = CleanConsideration - FaceValue;
-
-          const InterestAccrued = Quantity * InterestPerUnit;
-
-          const DirtyConsideration = CleanConsideration + InterestAccrued;
-
-          let TransactionNRD = "NA";
-          let recordDate_date = new Date("0000-01-01");
-
-          if (EventType !== "FI_RED") {
-            for (let index = 0; index < redemption.length; index++) {
-              const item = redemption[index];
-              const date = utils.excelToJSDate(item.Date);
-
-              if (item.RecordDate) {
-                const RecordDate = new Date(item.RecordDate);
-                if (
-                  date > SettlementDate &&
-                  item.SubSecCode === SucuritySubCode
-                ) {
-                  if (recordDate_date < SettlementDate) {
-                    recordDate_date = date;
-                    TransactionNRD = RecordDate;
-                  } else if (recordDate_date > date) {
-                    recordDate_date = date;
-                    TransactionNRD = RecordDate;
-                  }
-                }
-              }
-            }
-          }
-
-          const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
-
-          let NextDueDate = new Date("0000-01-01");
-
-          for (let index = 0; index < redemption.length; index++) {
-            const item = redemption[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            if (date > SettlementDate && item.SubSecCode === SucuritySubCode) {
-              if (NextDueDate < SettlementDate) {
-                NextDueDate = date;
-              } else if (NextDueDate > date) {
-                NextDueDate = date;
-              }
-            }
-          }
-
-          const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
-
-          return {
-            ClientCode,
-            ClientName,
-            EventType,
-            TradeDate,
-            SettlementDate,
-            SecurityCode,
-            SucuritySubCode,
-            YTM,
-            Quantity,
-            Rate,
-            InterestPerUnit,
-            StampDuty,
-            FaceValuePerUnit,
-            FaceValue,
-            Amortisation,
-            CleanConsideration,
-            InterestAccrued,
-            DirtyConsideration,
-            TransactionNRD,
-            PRDFlag,
-            NextDueDate,
-            PRDHolding,
-          };
-        })
-      );
-      // console.log(stockmaster1[0]);
-
       const result = await Promise.all(
         data2.map(async (item, index) => {
-          const ytm_value = item.CouponRate / 100;
+          // const ytm_value = item.CouponRate / 100;
+
+          const ytmvalues = stockmaster.filter(
+            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+          );
+
+          const ytm_value =
+            ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
 
           // console.log(item.SecurityCode);
 
@@ -1035,6 +925,8 @@ app.post(
         })
       );
 
+      return res.json({ status: true, data: result });
+
       const duplicatesresult = await Promise.all(
         result.map(async (data, i) => {
           const res = await subsecinfoModel.findOne(data);
@@ -1056,6 +948,115 @@ app.post(
       const updateduniqueresult = uniqueresult.filter((obj) => obj);
       await subsecinfoModel.insertMany(updateduniqueresult);
 
+      const stockmaster1 = await Promise.all(
+        stockmaster.map(async (item, index) => {
+          let {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            YTM,
+            SucuritySubCode,
+          } = item;
+
+          TradeDate = utils.excelToJSDate(TradeDate);
+          SettlementDate = utils.excelToJSDate(SettlementDate);
+
+          let FaceValuePerUnit = 0;
+          for (let index = 0; index < result.length; index++) {
+            const item = result[index];
+            // const date = utils.excelToJSDate(item.Date);
+
+            if (
+              item.SystemDate === SettlementDate &&
+              item.SecCode === SecurityCode
+            ) {
+              FaceValuePerUnit += item.FaceValue;
+            }
+          }
+
+          const FaceValue =
+            EventType === "FI_RED"
+              ? Quantity * Rate
+              : Quantity * FaceValuePerUnit;
+
+          const CleanConsideration = Quantity * Rate;
+
+          const Amortisation = CleanConsideration - FaceValue;
+
+          const InterestAccrued = Quantity * InterestPerUnit;
+
+          const DirtyConsideration = CleanConsideration + InterestAccrued;
+
+          let TransactionNRD = "NA";
+
+          if (EventType !== "FI_RED") {
+            for (let index = 0; index < result.length; index++) {
+              const item = result[index];
+
+              if (item.RecordDate) {
+                const RecordDate = new Date(item.RecordDate);
+                if (
+                  item.SystemDate === SettlementDate &&
+                  item.SubSecCode === SucuritySubCode
+                ) {
+                  TransactionNRD = RecordDate;
+                }
+              }
+            }
+          }
+
+          const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
+
+          let NextDueDate = new Date("0000-01-01");
+
+          for (let index = 0; index < redemption.length; index++) {
+            const item = result[index];
+
+            if (
+              item.SystemDate === SettlementDate &&
+              item.SubSecCode === SucuritySubCode
+            ) {
+              NextDueDate = item.NIPDate;
+            }
+          }
+
+          const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
+
+          return {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            SucuritySubCode,
+            YTM,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            FaceValuePerUnit,
+            FaceValue,
+            Amortisation,
+            CleanConsideration,
+            InterestAccrued,
+            DirtyConsideration,
+            TransactionNRD,
+            PRDFlag,
+            NextDueDate,
+            PRDHolding,
+          };
+        })
+      );
+      // console.log(stockmaster1[0]);
+
       await systemDateModel.findOneAndUpdate(
         {
           SystemDate: system_date,
@@ -1068,7 +1069,7 @@ app.post(
         { upsert: true, new: true }
       );
 
-      res.json({ status: true, data: stockmaster });
+      res.json({ status: true, data: stockmaster1 });
     } catch (error) {
       console.log(error);
       res.status(500).json({ status: false, message: error.message });
