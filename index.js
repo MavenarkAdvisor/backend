@@ -167,15 +167,12 @@ app.post(
               ...maparray,
             ];
 
-            // console.log("ytmarray", ytmarray);
-
             let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
 
             let defaultInitialYTM = 0.01;
             let defaultYTMdifferential = 0.01;
             let i = 0;
             do {
-              // console.log(ytmvalues);
               const InitialYTM = defaultInitialYTM;
 
               ytmvalues[i].InitialYTM = InitialYTM;
@@ -183,8 +180,6 @@ app.post(
               const YTMdifferential = defaultYTMdifferential;
 
               ytmvalues[i].YTMdifferential = YTMdifferential;
-
-              // console.log("InitialYTM", InitialYTM);
 
               for (let index = 0; index < ytmarray.length; index++) {
                 const item = ytmarray[index];
@@ -202,14 +197,11 @@ app.post(
 
                 ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
               }
-              // console.log("ytmarray", ytmarray);
 
               const OldDifference = ytmarray.reduce(
                 (accumulator, currentobj) => accumulator + currentobj.PV,
                 0
               );
-
-              // console.log("OldDifference", OldDifference);
 
               ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(2));
 
@@ -223,8 +215,6 @@ app.post(
                 ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
 
               const ModifiedYTM = ytmvalues[i].ModifiedYTM;
-
-              // console.log("ModifiedYTM", ModifiedYTM);
 
               for (let index = 0; index < ytmarray.length; index++) {
                 const item = ytmarray[index];
@@ -243,14 +233,11 @@ app.post(
 
                 ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
               }
-              // console.log("ytmarray Modify", ytmarray);
 
               const NewDifference = ytmarray.reduce(
                 (accumulator, currentobj) => accumulator + currentobj.PV,
                 0
               );
-
-              // console.log("NewDifference", NewDifference);
 
               ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(2));
 
@@ -287,7 +274,6 @@ app.post(
                   : InitialYTM + RequiredChangeYTM;
               const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
 
-              // console.log("EndYTM", EndYTM);
               ytmvalues[i].EndYTM = EndYTM;
 
               defaultInitialYTM = EndYTM;
@@ -301,32 +287,27 @@ app.post(
               } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
                 defaultYTMdifferential = YTMdifferential;
               } else if (Math.abs(ChangeInDiff) < 0.1) {
-                defaultYTMdifferential = YTMdifferential / 10;
-              } else {
                 defaultYTMdifferential = YTMdifferential;
+              } else {
+                defaultYTMdifferential = YTMdifferential / 10;
               }
 
               ytmvalues.push({ InitialYTM: EndYTM });
-              // console.log("EndYTM", EndYTM);
-              // console.log("ytmvalues", ytmvalues);
 
               i++;
             } while (
-              ytmvalues[i - 1].OldDifference > 0 &&
-              ytmvalues[i - 1].NewDifference > 0
+              ytmvalues[i - 1].OldDifference > 0 ||
+              ytmvalues[i - 1].NewDifference > 0 ||
+              ytmvalues[i - 1].OldDifference < 0 ||
+              ytmvalues[i - 1].NewDifference < 0
             );
+            
 
             if (ytmvalues[i - 1].OldDifference <= 0) {
               YTM = ytmvalues[i - 1].InitialYTM;
             } else if (ytmvalues[i - 1].NewDifference <= 0) {
               YTM = ytmvalues[i - 1].ModifiedYTM;
             }
-
-            // console.log("ytmvalues", ytmvalues);
-            // console.log("YTM", YTM);
-            // if (SecurityCode === "AYEFINSR3") {
-            //   return res.json({ status: true, data: ytmvalues });
-            // }
           }
 
           const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
@@ -348,42 +329,42 @@ app.post(
         })
       );
 
-      console.log("stockmaster", stockmaster);
-
       // return res.json({ status: true, data: stockmaster });
 
       const calculatedData = await Promise.all(
-        data.map(async (item, index) => {
-          const ytmvalues = stockmaster.filter(
-            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-          );
+        data
+          .filter((item) =>
+            stockmaster.find(
+              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+            )
+          )
+          .map(async (item, index) => {
+            const ytmvalues = stockmaster.filter(
+              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+            );
+            const YTM = ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
 
-          const YTM = ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
+            // const YTM = await utils.calculateYTM(item, index, data, system_date);
 
-          // const YTM = await utils.calculateYTM(item, index, data, system_date);
+            const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
 
-          const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
+            const Interest = item.Interest;
 
-          const Interest = item.Interest;
+            const Principal = item.Principal;
 
-          const Principal = item.Principal;
+            const Total = item.Total;
 
-          const Total = item.Total;
-
-          return {
-            ...item,
-            YTM,
-            SubSecCode,
-            Interest,
-            Principal,
-            Total,
-          };
-        })
+            return {
+              ...item,
+              YTM,
+              SubSecCode,
+              Interest,
+              Principal,
+              Total,
+            };
+          })
       );
 
-      console.log(calculatedData[0]);
-
-      // console.log(calculatedData[0]);
       for (let index = 0; index < calculatedData.length; index++) {
         const item = calculatedData[index];
 
@@ -454,7 +435,6 @@ app.post(
           calculatedData,
           system_date
         );
-        // console.log(Tenor);
         calculatedData[index].Tenor = Tenor;
 
         const MacaulayDuration = await utils.calculateMacaulayDuration(item);
@@ -523,409 +503,416 @@ app.post(
       await redemptionModel.insertMany(updateduniqueredemption);
 
       const result = await Promise.all(
-        data2.map(async (item, index) => {
-          // const ytm_value = item.CouponRate / 100;
-
-          const ytmvalues = stockmaster.filter(
-            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-          );
-
-          const ytm_value =
-            ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
-
-          // console.log(item.SecurityCode);
-
-          const subsecCode =
-            item.SecurityCode + "_" + (ytm_value * 100).toFixed(2);
-
-          const faceValue = calculatedData.reduce((total, curr) => {
-            return curr.SubSecCode === subsecCode &&
-              utils.excelToJSDate(curr.Date) > system_date
-              ? curr.Principal + total
-              : total;
-          }, 0.0);
-
-          const CouponRate = item.CouponRate / 100;
-
-          let lipDate = new Date("0000-01-01");
-          let nipDate = new Date("0000-01-01");
-          let recordDate = new Date("0000-01-01");
-          let recordDate_date = new Date("0000-01-01");
-
-          for (let index = 0; index < calculatedData.length; index++) {
-            const item = calculatedData[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            // lip date - filter exact and next smaller date from redempltion
-            if (
-              date <= valueDate &&
-              lipDate < date &&
-              item.SubSecCode === subsecCode
-            ) {
-              lipDate = date;
-            }
-
-            // nip date - filter exact and next larger date [redempltion] from system_date [current]
-
-            if (date > system_date && item.SubSecCode === subsecCode) {
-              if (nipDate < system_date) {
-                nipDate = date;
-              } else if (nipDate > date) {
-                nipDate = date;
-              }
-            }
-
-            // recorddate - filter exact and next larger RecordDate [redempltion] from system_date [current]
-
-            if (item.RecordDate) {
-              const RecordDate = new Date(item.RecordDate);
-              if (date > system_date && item.SubSecCode === subsecCode) {
-                if (recordDate_date < system_date) {
-                  recordDate_date = date;
-                  recordDate = RecordDate;
-                } else if (recordDate_date > date) {
-                  recordDate_date = date;
-                  recordDate = RecordDate;
-                }
-              }
-            }
-          }
-
-          let nipdateforsettlement = new Date("0000-01-01");
-
-          for (let index = 0; index < calculatedData.length; index++) {
-            const item = calculatedData[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            if (system_date > recordDate) {
-              // nipdateforsettlement : filter exact and next larger Date [redempltion] than nipdate [current]
-              if (date > nipDate && item.SubSecCode === subsecCode) {
-                if (nipdateforsettlement < nipDate) {
-                  nipdateforsettlement = date;
-                } else if (nipdateforsettlement > date) {
-                  nipdateforsettlement = date;
-                }
-              }
-            } else {
-              nipdateforsettlement = nipDate;
-            }
-          }
-
-          let lipdateforsettlement = new Date("0000-01-01");
-
-          let dcbdate = new Date("0000-01-01");
-          let dcb = 0;
-
-          for (let index = 0; index < calculatedData.length; index++) {
-            const item = calculatedData[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            // lip date - filter exact and next smaller date from redempltion
-            if (
-              date < nipdateforsettlement &&
-              lipdateforsettlement < date &&
-              item.SubSecCode === subsecCode
-            ) {
-              lipdateforsettlement = date;
-            }
-
-            // dcb - find dbc from redemption which have exact and next large date [redempltion] than settlement date [current]
-
-            if (date >= system_date && item.SubSecCode === subsecCode) {
-              if (dcbdate < system_date) {
-                dcbdate = date;
-                dcb = item.DCB;
-              } else if (dcbdate > date) {
-                dcbdate = date;
-                dcb = item.DCB;
-              }
-            }
-          }
-
-          // calculate Int Acc per day ---------------------------------
-
-          const intaccperday_daysDiff =
-            (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
-
-          let intaccperday_a = (faceValue * CouponRate) / dcb;
-
-          let intaccperday_x = intaccperday_a * intaccperday_daysDiff;
-
-          let intaccperday_y = intaccperday_a * (intaccperday_daysDiff - 1);
-
-          let intaccperday_b =
-            Math.pow(1 + CouponRate, intaccperday_daysDiff / dcb - 1) *
-            faceValue;
-
-          let intaccperday_c =
-            Math.pow(1 + CouponRate, (intaccperday_daysDiff - 1) / dcb - 1) *
-            faceValue;
-
-          let intaccperday_d =
-            Math.pow(1 + CouponRate, 1 / dcb - 1) * faceValue;
-
-          let intaccperday =
-            item.CouponType === "S"
-              ? system_date === lipdateforsettlement
-                ? intaccperday_a
-                : intaccperday_x - intaccperday_y
-              : item.CouponType === "C"
-              ? system_date === lipdateforsettlement
-                ? intaccperday_d
-                : intaccperday_b - intaccperday_c
-              : "NA";
-
-          //------------------------------------------------------
-
-          // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
-          const DirtyPriceForSettlement = calculatedData.reduce(
-            (total, curr) => {
-              return curr.SubSecCode === subsecCode && curr.PV
-                ? curr.PV + total
-                : total;
-            },
-            0.0
-          );
-          //------------------------------------------------------
-
-          // calculate Int Acc per day for settlement-------------
-          const intaccperdayforsettlement_daysDiff =
-            (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
-
-          let intaccperdayforsettlement_a =
-            ((faceValue * CouponRate) / dcb) *
-            intaccperdayforsettlement_daysDiff;
-
-          let intaccperdayforsettlement_b =
-            (Math.pow(
-              1 + CouponRate,
-              intaccperdayforsettlement_daysDiff / dcb
-            ) -
-              1) *
-            faceValue;
-
-          const intaccperdayforsettlement =
-            item.CouponType === "S"
-              ? intaccperdayforsettlement_a
-              : intaccperdayforsettlement_b;
-
-          //---------------------------------------------------------------------
-
-          let CleanPriceforSettlement = 0.0;
-
-          let CleanPriceforSettlement_a =
-            DirtyPriceForSettlement - intaccperdayforsettlement;
-
-          // Check the condition and round accordingly
-          if (CleanPriceforSettlement_a < 100) {
-            // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
-            CleanPriceforSettlement = parseFloat(
-              CleanPriceforSettlement_a.toFixed(4)
-            );
-          } else {
-            CleanPriceforSettlement = parseFloat(
-              CleanPriceforSettlement_a.toFixed(2)
-            );
-            // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
-          }
-
-          //---------------------------------------------------------------
-
-          let Priceper100_percentage =
-            (CleanPriceforSettlement / faceValue) * 100;
-
-          // Round the result to 4 decimal places
-          const Priceper100 =
-            Math.round(Priceper100_percentage * 10000) / 10000;
-
-          // ---------------------------------------------------------------
-
-          const FaceValueForValuation_valueDate = new Date(system_date);
-          FaceValueForValuation_valueDate.setDate(
-            FaceValueForValuation_valueDate.getDate() - 1
-          );
-
-          const FaceValueForValuation = calculatedData.reduce((total, curr) => {
-            return curr.SubSecCode === subsecCode &&
-              utils.excelToJSDate(curr.Date) > FaceValueForValuation_valueDate
-              ? curr.Principal + total
-              : total;
-          }, 0.0);
-
-          //------------------------------------------
-
-          let Maturity_Date = new Date("0000-01-01");
-          calculatedData.forEach((curr) => {
-            if (
-              curr.SubSecCode === subsecCode &&
-              utils.excelToJSDate(curr.Date) > Maturity_Date
+        data2
+          .filter((item) =>
+            stockmaster.find(
+              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
             )
-              Maturity_Date = utils.excelToJSDate(curr.Date);
-          });
+          )
+          .map(async (item, index) => {
+            // const ytm_value = item.CouponRate / 100;
 
-          //-------------------------------------------------------------
+            const ytmvalues = stockmaster.filter(
+              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+            );
 
-          let LipDateForValuation = new Date("0000-01-01");
+            const ytm_value =
+              ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
 
-          for (let index = 0; index < calculatedData.length; index++) {
-            const item = calculatedData[index];
-            const date = utils.excelToJSDate(item.Date);
+            const subsecCode =
+              item.SecurityCode + "_" + (ytm_value * 100).toFixed(2);
 
-            if (
-              date <= valueDate &&
-              LipDateForValuation < date &&
-              item.SubSecCode === subsecCode
-            ) {
-              LipDateForValuation = date;
-            }
-          }
-
-          const DirtyPriceForValuation = calculatedData.reduce(
-            (total, curr) => {
-              return curr.SubSecCode === subsecCode && curr.PVForValuation
-                ? curr.PVForValuation + total
+            const faceValue = calculatedData.reduce((total, curr) => {
+              return curr.SubSecCode === subsecCode &&
+                utils.excelToJSDate(curr.Date) > system_date
+                ? curr.Principal + total
                 : total;
-            },
-            0.0
-          );
+            }, 0.0);
 
-          const PrincipalRedemptionSinceLIP = FaceValueForValuation - faceValue;
+            const CouponRate = item.CouponRate / 100;
 
-          //---------------------------------------------------------------
+            let lipDate = new Date("0000-01-01");
+            let nipDate = new Date("0000-01-01");
+            let recordDate = new Date("0000-01-01");
+            let recordDate_date = new Date("0000-01-01");
 
-          const intaccsincelipforvaluation_daysDiff =
-            (valueDate - LipDateForValuation) / (1000 * 60 * 60 * 24);
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
 
-          const a =
-            ((FaceValueForValuation * CouponRate) / dcb) *
-            (intaccsincelipforvaluation_daysDiff + 1);
+              // lip date - filter exact and next smaller date from redempltion
+              if (
+                date <= valueDate &&
+                lipDate < date &&
+                item.SubSecCode === subsecCode
+              ) {
+                lipDate = date;
+              }
 
-          // Calculate 'b'
-          const b =
-            ((1 + CouponRate) **
-              ((intaccsincelipforvaluation_daysDiff + 1) / dcb) -
-              1) *
-            FaceValueForValuation;
+              // nip date - filter exact and next larger date [redempltion] from system_date [current]
 
-          // Determine the result based on the value of J5
-          let intaccsincelipforvaluation = 0.0;
-          if (item.CouponType === "S") {
-            intaccsincelipforvaluation = a;
-          } else if (item.CouponType === "C") {
-            intaccsincelipforvaluation = b;
-          } else {
-            intaccsincelipforvaluation = 0.0;
-          }
-
-          //---------------------------------------------------------------
-
-          let CleanPriceforValuation = 0.0;
-
-          let CleanPriceforValuation_a =
-            DirtyPriceForValuation -
-            PrincipalRedemptionSinceLIP -
-            intaccsincelipforvaluation;
-
-          // Check the condition and round accordingly
-          if (CleanPriceforValuation_a < 100) {
-            // CleanPriceforValuation = CleanPriceforValuation_a;
-            CleanPriceforValuation = parseFloat(
-              CleanPriceforValuation_a.toFixed(4)
-            );
-          } else {
-            CleanPriceforValuation = parseFloat(
-              CleanPriceforValuation_a.toFixed(2)
-            );
-            // CleanPriceforValuation = CleanPriceforValuation_a;
-          }
-
-          //---------------------------------------------------------
-
-          let PRDPrincipal = 0;
-          let PRDPrincipal_date = new Date("0000-01-01");
-          let PRDInterest = 0;
-          let PRDInterest_date = new Date("0000-01-01");
-
-          for (let index = 0; index < calculatedData.length; index++) {
-            const item = calculatedData[index];
-            const date = utils.excelToJSDate(item.Date);
-
-            if (system_date > recordDate) {
               if (date > system_date && item.SubSecCode === subsecCode) {
-                if (PRDPrincipal_date < system_date) {
-                  PRDPrincipal_date = date;
-                  PRDPrincipal = item.Principal;
-                } else if (PRDPrincipal_date > date) {
-                  PRDPrincipal_date = date;
-                  PRDPrincipal = item.Principal;
+                if (nipDate < system_date) {
+                  nipDate = date;
+                } else if (nipDate > date) {
+                  nipDate = date;
                 }
               }
+
+              // recorddate - filter exact and next larger RecordDate [redempltion] from system_date [current]
+
+              if (item.RecordDate) {
+                const RecordDate = new Date(item.RecordDate);
+                if (date > system_date && item.SubSecCode === subsecCode) {
+                  if (recordDate_date < system_date) {
+                    recordDate_date = date;
+                    recordDate = RecordDate;
+                  } else if (recordDate_date > date) {
+                    recordDate_date = date;
+                    recordDate = RecordDate;
+                  }
+                }
+              }
+            }
+
+            let nipdateforsettlement = new Date("0000-01-01");
+
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
+
+              if (system_date > recordDate) {
+                // nipdateforsettlement : filter exact and next larger Date [redempltion] than nipdate [current]
+                if (date > nipDate && item.SubSecCode === subsecCode) {
+                  if (nipdateforsettlement < nipDate) {
+                    nipdateforsettlement = date;
+                  } else if (nipdateforsettlement > date) {
+                    nipdateforsettlement = date;
+                  }
+                }
+              } else {
+                nipdateforsettlement = nipDate;
+              }
+            }
+
+            let lipdateforsettlement = new Date("0000-01-01");
+
+            let dcbdate = new Date("0000-01-01");
+            let dcb = 0;
+
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
+
+              // lip date - filter exact and next smaller date from redempltion
+              if (
+                date < nipdateforsettlement &&
+                lipdateforsettlement < date &&
+                item.SubSecCode === subsecCode
+              ) {
+                lipdateforsettlement = date;
+              }
+
+              // dcb - find dbc from redemption which have exact and next large date [redempltion] than settlement date [current]
+
+              if (date >= system_date && item.SubSecCode === subsecCode) {
+                if (dcbdate < system_date) {
+                  dcbdate = date;
+                  dcb = item.DCB;
+                } else if (dcbdate > date) {
+                  dcbdate = date;
+                  dcb = item.DCB;
+                }
+              }
+            }
+
+            // calculate Int Acc per day ---------------------------------
+
+            const intaccperday_daysDiff =
+              (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
+
+            let intaccperday_a = (faceValue * CouponRate) / dcb;
+
+            let intaccperday_x = intaccperday_a * intaccperday_daysDiff;
+
+            let intaccperday_y = intaccperday_a * (intaccperday_daysDiff - 1);
+
+            let intaccperday_b =
+              Math.pow(1 + CouponRate, intaccperday_daysDiff / dcb - 1) *
+              faceValue;
+
+            let intaccperday_c =
+              Math.pow(1 + CouponRate, (intaccperday_daysDiff - 1) / dcb - 1) *
+              faceValue;
+
+            let intaccperday_d =
+              Math.pow(1 + CouponRate, 1 / dcb - 1) * faceValue;
+
+            let intaccperday =
+              item.CouponType === "S"
+                ? system_date === lipdateforsettlement
+                  ? intaccperday_a
+                  : intaccperday_x - intaccperday_y
+                : item.CouponType === "C"
+                ? system_date === lipdateforsettlement
+                  ? intaccperday_d
+                  : intaccperday_b - intaccperday_c
+                : "NA";
+
+            //------------------------------------------------------
+
+            // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
+            const DirtyPriceForSettlement = calculatedData.reduce(
+              (total, curr) => {
+                return curr.SubSecCode === subsecCode && curr.PV
+                  ? curr.PV + total
+                  : total;
+              },
+              0.0
+            );
+            //------------------------------------------------------
+
+            // calculate Int Acc per day for settlement-------------
+            const intaccperdayforsettlement_daysDiff =
+              (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
+
+            let intaccperdayforsettlement_a =
+              ((faceValue * CouponRate) / dcb) *
+              intaccperdayforsettlement_daysDiff;
+
+            let intaccperdayforsettlement_b =
+              (Math.pow(
+                1 + CouponRate,
+                intaccperdayforsettlement_daysDiff / dcb
+              ) -
+                1) *
+              faceValue;
+
+            const intaccperdayforsettlement =
+              item.CouponType === "S"
+                ? intaccperdayforsettlement_a
+                : intaccperdayforsettlement_b;
+
+            //---------------------------------------------------------------------
+
+            let CleanPriceforSettlement = 0.0;
+
+            let CleanPriceforSettlement_a =
+              DirtyPriceForSettlement - intaccperdayforsettlement;
+
+            // Check the condition and round accordingly
+            if (CleanPriceforSettlement_a < 100) {
+              // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
+              CleanPriceforSettlement = parseFloat(
+                CleanPriceforSettlement_a.toFixed(4)
+              );
+            } else {
+              CleanPriceforSettlement = parseFloat(
+                CleanPriceforSettlement_a.toFixed(2)
+              );
+              // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
             }
 
             //---------------------------------------------------------------
 
-            if (system_date > recordDate) {
-              if (date > system_date && item.SubSecCode === subsecCode) {
-                if (PRDPrincipal_date < system_date) {
-                  PRDInterest_date = date;
-                  PRDInterest = item.Principal;
-                } else if (PRDPrincipal_date > date) {
-                  PRDInterest_date = date;
-                  PRDInterest = item.Principal;
+            let Priceper100_percentage =
+              (CleanPriceforSettlement / faceValue) * 100;
+
+            // Round the result to 4 decimal places
+            const Priceper100 =
+              Math.round(Priceper100_percentage * 10000) / 10000;
+
+            // ---------------------------------------------------------------
+
+            const FaceValueForValuation_valueDate = new Date(system_date);
+            FaceValueForValuation_valueDate.setDate(
+              FaceValueForValuation_valueDate.getDate() - 1
+            );
+
+            const FaceValueForValuation = calculatedData.reduce(
+              (total, curr) => {
+                return curr.SubSecCode === subsecCode &&
+                  utils.excelToJSDate(curr.Date) >
+                    FaceValueForValuation_valueDate
+                  ? curr.Principal + total
+                  : total;
+              },
+              0.0
+            );
+
+            //------------------------------------------
+
+            let Maturity_Date = new Date("0000-01-01");
+            calculatedData.forEach((curr) => {
+              if (
+                curr.SubSecCode === subsecCode &&
+                utils.excelToJSDate(curr.Date) > Maturity_Date
+              )
+                Maturity_Date = utils.excelToJSDate(curr.Date);
+            });
+
+            //-------------------------------------------------------------
+
+            let LipDateForValuation = new Date("0000-01-01");
+
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
+
+              if (
+                date <= valueDate &&
+                LipDateForValuation < date &&
+                item.SubSecCode === subsecCode
+              ) {
+                LipDateForValuation = date;
+              }
+            }
+
+            const DirtyPriceForValuation = calculatedData.reduce(
+              (total, curr) => {
+                return curr.SubSecCode === subsecCode && curr.PVForValuation
+                  ? curr.PVForValuation + total
+                  : total;
+              },
+              0.0
+            );
+
+            const PrincipalRedemptionSinceLIP =
+              FaceValueForValuation - faceValue;
+
+            //---------------------------------------------------------------
+
+            const intaccsincelipforvaluation_daysDiff =
+              (valueDate - LipDateForValuation) / (1000 * 60 * 60 * 24);
+
+            const a =
+              ((FaceValueForValuation * CouponRate) / dcb) *
+              (intaccsincelipforvaluation_daysDiff + 1);
+
+            // Calculate 'b'
+            const b =
+              ((1 + CouponRate) **
+                ((intaccsincelipforvaluation_daysDiff + 1) / dcb) -
+                1) *
+              FaceValueForValuation;
+
+            // Determine the result based on the value of J5
+            let intaccsincelipforvaluation = 0.0;
+            if (item.CouponType === "S") {
+              intaccsincelipforvaluation = a;
+            } else if (item.CouponType === "C") {
+              intaccsincelipforvaluation = b;
+            } else {
+              intaccsincelipforvaluation = 0.0;
+            }
+
+            //---------------------------------------------------------------
+
+            let CleanPriceforValuation = 0.0;
+
+            let CleanPriceforValuation_a =
+              DirtyPriceForValuation -
+              PrincipalRedemptionSinceLIP -
+              intaccsincelipforvaluation;
+
+            // Check the condition and round accordingly
+            if (CleanPriceforValuation_a < 100) {
+              // CleanPriceforValuation = CleanPriceforValuation_a;
+              CleanPriceforValuation = parseFloat(
+                CleanPriceforValuation_a.toFixed(4)
+              );
+            } else {
+              CleanPriceforValuation = parseFloat(
+                CleanPriceforValuation_a.toFixed(2)
+              );
+              // CleanPriceforValuation = CleanPriceforValuation_a;
+            }
+
+            //---------------------------------------------------------
+
+            let PRDPrincipal = 0;
+            let PRDPrincipal_date = new Date("0000-01-01");
+            let PRDInterest = 0;
+            let PRDInterest_date = new Date("0000-01-01");
+
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
+
+              if (system_date > recordDate) {
+                if (date > system_date && item.SubSecCode === subsecCode) {
+                  if (PRDPrincipal_date < system_date) {
+                    PRDPrincipal_date = date;
+                    PRDPrincipal = item.Principal;
+                  } else if (PRDPrincipal_date > date) {
+                    PRDPrincipal_date = date;
+                    PRDPrincipal = item.Principal;
+                  }
+                }
+              }
+
+              //---------------------------------------------------------------
+
+              if (system_date > recordDate) {
+                if (date > system_date && item.SubSecCode === subsecCode) {
+                  if (PRDPrincipal_date < system_date) {
+                    PRDInterest_date = date;
+                    PRDInterest = item.Principal;
+                  } else if (PRDPrincipal_date > date) {
+                    PRDInterest_date = date;
+                    PRDInterest = item.Principal;
+                  }
                 }
               }
             }
-          }
 
-          const CleanPriceForPRDUnits = CleanPriceforValuation - PRDPrincipal;
+            const CleanPriceForPRDUnits = CleanPriceforValuation - PRDPrincipal;
 
-          const MacaulayDuration = calculatedData.reduce((total, curr) => {
-            return curr.SubSecCode === subsecCode && curr.PVForValuation
-              ? curr.MacaulayDuration + total
-              : total;
-          }, 0.0);
+            const MacaulayDuration = calculatedData.reduce((total, curr) => {
+              return curr.SubSecCode === subsecCode && curr.PVForValuation
+                ? curr.MacaulayDuration + total
+                : total;
+            }, 0.0);
 
-          const ModifiedDuration = MacaulayDuration / (1 + ytm_value);
+            const ModifiedDuration = MacaulayDuration / (1 + ytm_value);
 
-          return {
-            SubSecCode: subsecCode,
-            ValuationDate: valueDate,
-            SystemDate: system_date,
-            SecCode: item.SecurityCode,
-            ISIN: item.ISIN,
-            SecurityName: item.SecurityDescription,
-            YTM: ytm_value,
-            FaceValue: faceValue,
-            CouponRate,
-            CouponType: item.CouponType,
-            LIPDate: lipDate,
-            NIPDate: nipDate,
-            RecordDate: recordDate,
-            NIPDateForSettlement: nipdateforsettlement,
-            LIPDateForSettlement: lipdateforsettlement,
-            DCB: dcb,
-            IntAccPerDay: intaccperday,
-            DirtyPriceForSettlement,
-            IntAccPerDayForSettlement: intaccperdayforsettlement,
-            CleanPriceforSettlement,
-            Priceper100,
-            FaceValueForValuation,
-            MaturityDate: Maturity_Date,
-            LipDateForValuation,
-            DirtyPriceForValuation,
-            PrincipalRedemptionSinceLIP,
-            IntAccPerDayForValuation: intaccsincelipforvaluation,
-            CleanPriceforValuation,
-            PRDPrincipal,
-            PRDInterest,
-            CleanPriceForPRDUnits,
-            MacaulayDuration,
-            ModifiedDuration,
-          };
-        })
+            return {
+              SubSecCode: subsecCode,
+              ValuationDate: valueDate,
+              SystemDate: system_date,
+              SecCode: item.SecurityCode,
+              ISIN: item.ISIN,
+              SecurityName: item.SecurityDescription,
+              YTM: ytm_value,
+              FaceValue: faceValue,
+              CouponRate,
+              CouponType: item.CouponType,
+              LIPDate: lipDate,
+              NIPDate: nipDate,
+              RecordDate: recordDate,
+              NIPDateForSettlement: nipdateforsettlement,
+              LIPDateForSettlement: lipdateforsettlement,
+              DCB: dcb,
+              IntAccPerDay: intaccperday,
+              DirtyPriceForSettlement,
+              IntAccPerDayForSettlement: intaccperdayforsettlement,
+              CleanPriceforSettlement,
+              Priceper100,
+              FaceValueForValuation,
+              MaturityDate: Maturity_Date,
+              LipDateForValuation,
+              DirtyPriceForValuation,
+              PrincipalRedemptionSinceLIP,
+              IntAccPerDayForValuation: intaccsincelipforvaluation,
+              CleanPriceforValuation,
+              PRDPrincipal,
+              PRDInterest,
+              CleanPriceForPRDUnits,
+              MacaulayDuration,
+              ModifiedDuration,
+            };
+          })
       );
-
-      return res.json({ status: true, data: result });
 
       const duplicatesresult = await Promise.all(
         result.map(async (data, i) => {
@@ -948,114 +935,117 @@ app.post(
       const updateduniqueresult = uniqueresult.filter((obj) => obj);
       await subsecinfoModel.insertMany(updateduniqueresult);
 
+      // return res.json({ status: true, data: result });
+
       const stockmaster1 = await Promise.all(
-        stockmaster.map(async (item, index) => {
-          let {
-            ClientCode,
-            ClientName,
-            EventType,
-            TradeDate,
-            SettlementDate,
-            SecurityCode,
-            Quantity,
-            Rate,
-            InterestPerUnit,
-            StampDuty,
-            YTM,
-            SucuritySubCode,
-          } = item;
+        stockmaster
+          .filter((item) => item.YTM)
+          .map(async (item, index) => {
+            let {
+              ClientCode,
+              ClientName,
+              EventType,
+              TradeDate,
+              SettlementDate,
+              SecurityCode,
+              Quantity,
+              Rate,
+              InterestPerUnit,
+              StampDuty,
+              YTM,
+              SucuritySubCode,
+            } = item;
 
-          TradeDate = utils.excelToJSDate(TradeDate);
-          SettlementDate = utils.excelToJSDate(SettlementDate);
-
-          let FaceValuePerUnit = 0;
-          for (let index = 0; index < result.length; index++) {
-            const item = result[index];
-            // const date = utils.excelToJSDate(item.Date);
-
-            if (
-              item.SystemDate === SettlementDate &&
-              item.SecCode === SecurityCode
-            ) {
-              FaceValuePerUnit += item.FaceValue;
-            }
-          }
-
-          const FaceValue =
-            EventType === "FI_RED"
-              ? Quantity * Rate
-              : Quantity * FaceValuePerUnit;
-
-          const CleanConsideration = Quantity * Rate;
-
-          const Amortisation = CleanConsideration - FaceValue;
-
-          const InterestAccrued = Quantity * InterestPerUnit;
-
-          const DirtyConsideration = CleanConsideration + InterestAccrued;
-
-          let TransactionNRD = "NA";
-
-          if (EventType !== "FI_RED") {
+            let FaceValuePerUnit = 0;
             for (let index = 0; index < result.length; index++) {
               const item = result[index];
+              // const date = utils.excelToJSDate(item.Date);
 
-              if (item.RecordDate) {
-                const RecordDate = new Date(item.RecordDate);
-                if (
-                  item.SystemDate === SettlementDate &&
-                  item.SubSecCode === SucuritySubCode
-                ) {
-                  TransactionNRD = RecordDate;
+              if (
+                item.SystemDate === SettlementDate &&
+                item.SecCode === SecurityCode
+              ) {
+                FaceValuePerUnit += item.FaceValue;
+              }
+            }
+
+            const FaceValue =
+              EventType === "FI_RED"
+                ? Quantity * Rate
+                : Quantity * FaceValuePerUnit;
+
+            const CleanConsideration = Quantity * Rate;
+
+            const Amortisation = CleanConsideration - FaceValue;
+
+            const InterestAccrued = Quantity * InterestPerUnit;
+
+            const DirtyConsideration = CleanConsideration + InterestAccrued;
+
+            let TransactionNRD = "NA";
+
+            if (EventType !== "FI_RED") {
+              for (let index = 0; index < result.length; index++) {
+                const item = result[index];
+
+                if (item.RecordDate) {
+                  const RecordDate = new Date(item.RecordDate);
+
+                  if (
+                    item.SystemDate.toString() === SettlementDate.toString() &&
+                    item.SubSecCode === SucuritySubCode
+                  ) {
+                    TransactionNRD = RecordDate;
+                  }
                 }
               }
             }
-          }
 
-          const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
+            const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
 
-          let NextDueDate = new Date("0000-01-01");
+            let NextDueDate = new Date("0000-01-01");
 
-          for (let index = 0; index < redemption.length; index++) {
-            const item = result[index];
+            for (let index = 0; index < result.length; index++) {
+              const item = result[index];
 
-            if (
-              item.SystemDate === SettlementDate &&
-              item.SubSecCode === SucuritySubCode
-            ) {
-              NextDueDate = item.NIPDate;
+              if (
+                item.SystemDate.toString() === SettlementDate.toString() &&
+                item.SubSecCode === SucuritySubCode
+              ) {
+                NextDueDate = item.NIPDate;
+              }
             }
-          }
 
-          const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
+            const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
 
-          return {
-            ClientCode,
-            ClientName,
-            EventType,
-            TradeDate,
-            SettlementDate,
-            SecurityCode,
-            SucuritySubCode,
-            YTM,
-            Quantity,
-            Rate,
-            InterestPerUnit,
-            StampDuty,
-            FaceValuePerUnit,
-            FaceValue,
-            Amortisation,
-            CleanConsideration,
-            InterestAccrued,
-            DirtyConsideration,
-            TransactionNRD,
-            PRDFlag,
-            NextDueDate,
-            PRDHolding,
-          };
-        })
+            return {
+              ClientCode,
+              ClientName,
+              EventType,
+              TradeDate,
+              SettlementDate,
+              SecurityCode,
+              SucuritySubCode,
+              YTM,
+              Quantity,
+              Rate,
+              InterestPerUnit,
+              StampDuty,
+              FaceValuePerUnit,
+              FaceValue,
+              Amortisation,
+              CleanConsideration,
+              InterestAccrued,
+              DirtyConsideration,
+              TransactionNRD,
+              PRDFlag,
+              NextDueDate,
+              PRDHolding,
+            };
+          })
       );
-      // console.log(stockmaster1[0]);
+
+      // return res.json({ status: true, data: stockmaster1 });
 
       await systemDateModel.findOneAndUpdate(
         {
@@ -1069,7 +1059,7 @@ app.post(
         { upsert: true, new: true }
       );
 
-      res.json({ status: true, data: stockmaster1 });
+      res.json({ status: true, stockmaster: stockmaster1, subsecinfo: result });
     } catch (error) {
       console.log(error);
       res.status(500).json({ status: false, message: error.message });
