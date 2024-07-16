@@ -62,6 +62,22 @@ app.post("/download", async (req, res) => {
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
+
+  // const newWorkbook = xlsx.utils.book_new();
+  // const newWorksheet = xlsx.utils.json_to_sheet(cleanResult);
+  // xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+  // Save the new workbook
+  // const outputPath = path.join("uploads", "output.xlsx");
+  // xlsx.writeFile(newWorkbook, outputPath);
+
+  // res.download(outputPath, "output.xlsx", (err) => {
+  //   if (err) {
+  //     return res.status(500).json({ error: "Failed to download file" });
+  //   }
+  //   // Clean up the uploaded file and the generated Excel file after download
+  //   fs.unlink(outputPath, () => {});
+  // });
 });
 
 app.post(
@@ -307,6 +323,244 @@ app.post(
         stockmaster[index].SucuritySubCode = SucuritySubCode;
       }
 
+      // const stockmaster = await Promise.all(
+      //   stockmaster.map(async (item, index) => {
+      //     let {
+      //       ClientCode,
+      //       ClientName,
+      //       EventType,
+      //       TradeDate,
+      //       SettlementDate,
+      //       SecurityCode,
+      //       Quantity,
+      //       Rate,
+      //       InterestPerUnit,
+      //       StampDuty,
+      //     } = item;
+
+      //     TradeDate = utils.excelToJSDate(TradeDate);
+      //     SettlementDate = utils.excelToJSDate(SettlementDate);
+
+      //     let YTM = 0.0;
+
+      //     console.log(
+      //       new Date(system_date).toString() >=
+      //         new Date(SettlementDate).toString()
+      //     );
+      //     if (
+      //       new Date(system_date).toString() >=
+      //       new Date(SettlementDate).toString()
+      //     ) {
+      //       const prevYTMobj = stockmaster.find(
+      //         (obj) => SecurityCode === obj.SecurityCode && obj.YTM
+      //       );
+
+      //       if (prevYTMobj) {
+      //         YTM = prevYTMobj.YTM;
+      //       } else {
+      //         let filterarray = data.filter(
+      //           (obj) =>
+      //             obj.SecurityCode === SecurityCode &&
+      //             utils.excelToJSDate(obj.Date) > SettlementDate
+      //         );
+      //         if (InterestPerUnit < 0) {
+      //           filterarray = filterarray.slice(1);
+      //         }
+
+      //         const maparray = filterarray.map((obj) => {
+      //           return {
+      //             Date: utils.excelToJSDate(obj.Date),
+      //             Total: obj.Total,
+      //             DCB: obj.DCB,
+      //           };
+      //         });
+
+      //         let ytmarray = [
+      //           {
+      //             Date: SettlementDate,
+      //             Total: (Rate + InterestPerUnit) * -1,
+      //             DF: 1.0,
+      //           },
+      //           ...maparray,
+      //         ];
+
+      //         let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
+
+      //         let defaultInitialYTM = 0.01;
+      //         let defaultYTMdifferential = 0.01;
+      //         let i = 0;
+      //         do {
+      //           const InitialYTM = defaultInitialYTM;
+
+      //           ytmvalues[i].InitialYTM = InitialYTM;
+
+      //           const YTMdifferential = defaultYTMdifferential;
+
+      //           ytmvalues[i].YTMdifferential = YTMdifferential;
+
+      //           for (let index = 0; index < ytmarray.length; index++) {
+      //             const item = ytmarray[index];
+
+      //             if (index > 0) {
+      //               const dayDiff =
+      //                 (ytmarray[index].Date - ytmarray[index - 1].Date) /
+      //                 (1000 * 60 * 60 * 24);
+      //               ytmarray[index].DF =
+      //                 item.DCB === ""
+      //                   ? 0
+      //                   : ytmarray[index - 1].DF /
+      //                     Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+      //             }
+
+      //             ytmarray[index].PV =
+      //               ytmarray[index].Total * ytmarray[index].DF;
+      //           }
+
+      //           const OldDifference = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.PV,
+      //             0
+      //           );
+
+      //           ytmvalues[i].OldDifference = parseFloat(
+      //             OldDifference.toFixed(2)
+      //           );
+
+      //           const AdjustedYTMDifferential =
+      //             OldDifference < 0
+      //               ? ytmvalues[i].YTMdifferential * -1
+      //               : ytmvalues[i].YTMdifferential;
+      //           ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
+
+      //           ytmvalues[i].ModifiedYTM =
+      //             ytmvalues[i].InitialYTM +
+      //             ytmvalues[i].AdjustedYTMDifferential;
+
+      //           const ModifiedYTM = ytmvalues[i].ModifiedYTM;
+
+      //           for (let index = 0; index < ytmarray.length; index++) {
+      //             const item = ytmarray[index];
+
+      //             if (index > 0) {
+      //               const dayDiff =
+      //                 (ytmarray[index].Date - ytmarray[index - 1].Date) /
+      //                 (1000 * 60 * 60 * 24);
+
+      //               ytmarray[index].DF =
+      //                 item.DCB === ""
+      //                   ? 0
+      //                   : ytmarray[index - 1].DF /
+      //                     Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+      //             }
+
+      //             ytmarray[index].PV =
+      //               ytmarray[index].Total * ytmarray[index].DF;
+      //           }
+
+      //           const NewDifference = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.PV,
+      //             0
+      //           );
+
+      //           ytmvalues[i].NewDifference = parseFloat(
+      //             NewDifference.toFixed(2)
+      //           );
+
+      //           const ChangeInYTM =
+      //             OldDifference > 0 === NewDifference > 0
+      //               ? ModifiedYTM - InitialYTM
+      //               : "NA";
+
+      //           ytmvalues[i].ChangeInYTM = ChangeInYTM;
+
+      //           const ChangeInDiff =
+      //             ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
+
+      //           ytmvalues[i].ChangeInDiff = ChangeInDiff;
+
+      //           const RequiredChangeInDiff =
+      //             ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
+
+      //           ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
+
+      //           const RequiredChangeYTM =
+      //             ChangeInYTM === "NA"
+      //               ? "NA"
+      //               : isNaN(ChangeInDiff) || ChangeInDiff === 0
+      //               ? 0
+      //               : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+
+      //           ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
+
+      //           const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
+      //           const EndYTMv2 =
+      //             RequiredChangeYTM === "NA"
+      //               ? InitialYTM
+      //               : InitialYTM + RequiredChangeYTM;
+      //           const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
+
+      //           ytmvalues[i].EndYTM = EndYTM;
+
+      //           defaultInitialYTM = EndYTM;
+
+      //           const SumOfTotal = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.Total,
+      //             0
+      //           );
+      //           if (ChangeInDiff === "NA") {
+      //             defaultYTMdifferential = YTMdifferential / 2;
+      //           } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
+      //             defaultYTMdifferential = YTMdifferential;
+      //           } else if (Math.abs(ChangeInDiff) < 0.1) {
+      //             defaultYTMdifferential = YTMdifferential;
+      //           } else {
+      //             defaultYTMdifferential = YTMdifferential / 10;
+      //           }
+
+      //           ytmvalues.push({ InitialYTM: EndYTM });
+
+      //           i++;
+      //         } while (
+      //           ytmvalues[i - 1].OldDifference > 0 ||
+      //           ytmvalues[i - 1].NewDifference > 0 ||
+      //           ytmvalues[i - 1].OldDifference < 0 ||
+      //           ytmvalues[i - 1].NewDifference < 0
+      //         );
+
+      //         if (ytmvalues[i - 1].OldDifference <= 0) {
+      //           YTM = ytmvalues[i - 1].InitialYTM;
+      //         } else if (ytmvalues[i - 1].NewDifference <= 0) {
+      //           YTM = ytmvalues[i - 1].ModifiedYTM;
+      //         }
+      //       }
+      //     }
+
+      //     const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+
+      //     return {
+      //       ClientCode,
+      //       ClientName,
+      //       EventType,
+      //       TradeDate,
+      //       SettlementDate,
+      //       SecurityCode,
+      //       Quantity,
+      //       Rate,
+      //       InterestPerUnit,
+      //       StampDuty,
+      //       YTM,
+      //       SucuritySubCode,
+      //     };
+      //   })
+      // );
+
+      // return res.json({
+      //   status: true,
+      //   stockmaster: stockmaster,
+      //   subsecinfo: stockmaster,
+      // });
+
+      // return res.json({ status: true, data: stockmaster });
+
       const calculatedData = await Promise.all(
         data
           .filter(
@@ -455,6 +709,14 @@ app.post(
           PV: item.PV,
         };
       });
+
+      // return res.json({
+      //   status: true,
+      //   stockmaster: redemption,
+      //   subsecinfo: redemption,
+      // });
+
+      // return res.json({ status: true, data: redemption });
 
       const duplicatesredemption = await Promise.all(
         redemption.map(async (data, i) => {
@@ -1294,6 +1556,28 @@ app.post(
       console.log(error);
       res.status(500).json({ status: false, message: error.message });
     }
+
+    // const newWorkbook = xlsx.utils.book_new();
+    // const newWorksheet = xlsx.utils.json_to_sheet(result);
+    // xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+    // Save the new workbook
+    // const outputPath = path.join("uploads", "output.xlsx");
+    // xlsx.writeFile(newWorkbook, outputPath);
+
+    // res.download(outputPath, "output.xlsx", (err) => {
+    //   if (err) {
+    //     return res.status(500).json({ error: "Failed to download file" });
+    //   }
+    //   // Clean up the uploaded file and the generated Excel file after download
+    //   fs.unlink(outputPath, () => {});
+    // });
+    // res.json({
+    //   data: data.slice(0, 1),
+    //   calculatedData: calculatedData.slice(0, 1),
+    //   Redemption_Schedule,
+    //   result,
+    // });
   }
 );
 
@@ -1363,6 +1647,182 @@ app.post(
     });
   }
 );
+
+// app.post(
+//   "/upload",
+//   upload.fields([
+//     { name: "file1", maxCount: 1 },
+//     { name: "file2", maxCount: 1 },
+//   ]),
+//   async (req, res) => {
+//     let { system_date } = req.body;
+//     system_date = new Date(system_date);
+
+//     const file1 = req.files["file1"][0];
+//     const file2 = req.files["file2"][0];
+//     // const file3 = req.files["file3"][0];
+
+//     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
+//     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
+//     const data1 = xlsx.utils.sheet_to_json(sheet1);
+
+//     const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
+//     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
+//     const data2 = xlsx.utils.sheet_to_json(sheet2);
+
+//     // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
+//     // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
+//     // const stockmaster = xlsx.utils.sheet_to_json(sheet3);
+
+//     const data = utils.joinDataArrays(data1, data2, "SecurityCode");
+
+//     // Map over the data array and calculate the new field for each item
+//     const calculatedData = await Promise.all(
+//       data.map(async (item, index) => {
+//         const ytm_value = item.CouponRate;
+
+//         const subsecCode = item.SecurityCode + "_" + ytm_value;
+
+//         const prevCFDate = await utils.calculatePrevCFDate(
+//           item,
+//           index,
+//           data,
+//           system_date
+//         );
+
+//         const StartDateForValue = await utils.calculateStartDateForValue(
+//           item,
+//           index,
+//           data,
+//           system_date
+//         );
+
+//         return {
+//           ...item,
+//           YTM: ytm_value,
+//           PrevCfDate: prevCFDate,
+//           SubSecCode: subsecCode,
+//           StartDateForValue,
+//         };
+//       })
+//     );
+
+//     // Calculate DF
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const StartDate = await utils.calculateStartDate(
+//         item,
+//         index,
+//         data,
+//         system_date
+//       );
+//       calculatedData[index].StartDate = StartDate;
+
+//       const DF = await utils.calculateDF(item, index, calculatedData);
+//       calculatedData[index].DF = parseFloat(DF).toFixed(16);
+
+//       const DFForValuation = await utils.calculateDFForValuation(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].DFForValuation =
+//         parseFloat(DFForValuation).toFixed(16);
+
+//       const PVForValuation = await utils.calculatePVForValuation(
+//         item,
+//         system_date
+//       );
+//       calculatedData[index].PVForValuation = PVForValuation;
+
+//       // calculatedData[index].PV = PVForValuation;
+
+//       // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
+//       // calculatedData[index].PV = PV;
+
+//       const PV = await utils.calculatePVMOdify(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].PV = PV;
+//     }
+
+//     await utils.calculateWeightage(calculatedData); // calculating weightage
+
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const Tenor = await utils.calculateTenor(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].Tenor = Tenor;
+
+//       const MacaulayDuration = await utils.calculateMacaulayDuration(item);
+//       calculatedData[index].MacaulayDuration = MacaulayDuration;
+
+//       if (MacaulayDuration === "") {
+//         calculatedData[index].RDDays = "";
+//         calculatedData[index].RDType = "";
+//       }
+
+//       const recordDate = await utils.calculateRecordDateModify(item);
+//       calculatedData[index].RecordDate = recordDate;
+//     }
+
+//     const result = calculatedData.map((item, index) => {
+//       return {
+//         SubSecCode: item.SubSecCode,
+//         SecCode: item.SecurityCode,
+//         ISIN: item.ISIN,
+//         Date: item.Date,
+//         Interest: (item.Interest / 100).toFixed(2),
+//         Principal: (item.Principal / 100).toFixed(2),
+//         Total: (item.Total / 100).toFixed(2),
+//         DCB: item.DCB,
+//         YTM: item.YTM.toFixed(2),
+//         StartDateForValue: item.StartDateForValue,
+//         DFForValuation: item.DFForValuation,
+//         PVForValuation: item.PVForValuation,
+//         Weightage: item.Weightage,
+//         Tenor: item.Tenor.toFixed(2),
+//         MacaulayDuration:
+//           item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
+//         RDDays: item.RDDays,
+//         RDType: item.RDType,
+//         RecordDate: item.RecordDate,
+//         StartDate: item.StartDate,
+//         DF: item.DF,
+//         PV: item.PV,
+//       };
+//     });
+
+//     const newWorkbook = xlsx.utils.book_new();
+//     const newWorksheet = xlsx.utils.json_to_sheet(result);
+//     xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+//     // Save the new workbook
+//     const outputPath = path.join("uploads", `\output.xlsx`);
+//     xlsx.writeFile(newWorkbook, outputPath);
+
+//     // res.json({
+//     //   data: data.slice(0, 1),
+//     //   calculatedData: calculatedData.slice(0, 1),
+//     //   result,
+//     // });
+//     res.json({
+//       downloadUrl: `http://localhost:5000/download/${path.basename(
+//         outputPath
+//       )}`,
+//     });
+//   }
+// );
 
 app.get("/download/:filename", (req, res) => {
   const filename = req.params.filename;
@@ -1478,6 +1938,10 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
 
   console.log("calculatedData: ", calculatedData);
 });
+
+// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
+//   const data = await utils.readExcelFile(req.file.buffer)
+// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {

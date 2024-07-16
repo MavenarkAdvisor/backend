@@ -1,44 +1,29 @@
 const mongoose = require("mongoose");
 
-const subsecinfoSchema = new mongoose.Schema(
+const secDetailSchema = new mongoose.Schema(
   {
-    SubSecCode: String,
-    ValuationDate: Date,
-    SystemDate: Date,
-    SecCode: String,
+    SecurityCode: String,
     ISIN: String,
-    SecurityName: String,
-    YTM: Number,
-    FaceValue: Number,
+    SecurityDescription: String,
+    AssetType: String,
+    IssuanceDate: Number,
+    MaturityDate: Number,
     CouponRate: Number,
     CouponType: String,
-    LIPDate: Date,
-    NIPDate: Date,
-    RecordDate: Date,
-    NIPDateForSettlement: Date,
-    LIPDateForSettlement: Date,
-    DCB: Number,
-    IntAccPerDay: Number,
-    DirtyPriceForSettlement: Number,
-    IntAccPerDayForSettlement: Number,
-    CleanPriceforSettlement: Number,
-    Priceper100: Number,
-    FaceValueForValuation: Number,
-    MaturityDate: Date,
-    LipDateForValuation: Date,
-    DirtyPriceForValuation: Number,
-    PrincipalRedemptionSinceLIP: Number,
-    IntAccPerDayForValuation: Number,
-    CleanPriceforValuation: Number,
-    PRDPrincipal: Number,
-    PRDInterest: Number,
-    CleanPriceForPRDUnits: Number,
-    MacaulayDuration: Number,
-    ModifiedDuration: Number,
+    Frequency: String,
+    Maturity: String,
+    Seniority: String,
+    Security: String,
+    IssuerShortName: String,
+    IssuerFullName: String,
+    Sector: String,
+    Exchange: String,
+    RDDays: Number,
+    RDType: String,
   },
   { timestamps: true, require: true }
 );
 
-const Subsecinfo = mongoose.model("subsecinfo", subsecinfoSchema);
+const secDetail = mongoose.model("secDetail", secDetailSchema);
 
-module.exports = Subsecinfo;
+module.exports = secDetail;

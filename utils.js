@@ -28,26 +28,6 @@ exports.JSToExcelDate = (newdate) => {
   return Math.floor(date.getTime() / 86400 / 1000) + 25569;
 };
 
-exports.calculateStartDateForValue = async (item, index, data, system_date) => {
-  if (index === 0) {
-    return "";
-  }
-
-  const prevDate = data[index - 1]?.Date
-    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
-    : 1;
-  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-
-  const valueDate = new Date(system_date);
-  valueDate.setDate(valueDate.getDate() - 1);
-
-  if (item.Total < 0 || currentRowDate <= valueDate) {
-    return "";
-  } else {
-    return system_date > prevDate ? system_date : prevDate;
-  }
-};
-
 exports.calculateDFForValuation = async (item, index, data, system_date) => {
   if (item.PrevCfDate == "") {
     return parseFloat(1).toFixed(16);
@@ -185,6 +165,26 @@ exports.calculateStartDate = async (item, index, data, system_date) => {
   const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
+  if (item.Total < 0 || currentRowDate <= valueDate) {
+    return "";
+  } else {
+    return system_date > prevDate ? system_date : prevDate;
+  }
+};
+
+exports.calculateStartDateForValue = async (item, index, data, system_date) => {
+  if (index === 0) {
+    return "";
+  }
+
+  const prevDate = data[index - 1]?.Date
+    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
+    : 1;
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
+
   if (item.Total < 0 || currentRowDate <= system_date) {
     return "";
   } else {
@@ -193,40 +193,44 @@ exports.calculateStartDate = async (item, index, data, system_date) => {
 };
 
 exports.calculatePVMOdify = async (item, index, data, system_date) => {
-  if (item.StartDate === "") {
-    return "";
-  }
-
-  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-
-  const valueDate = new Date(system_date);
-  valueDate.setDate(valueDate.getDate() - 1);
-
-  if (item.Total < 0 || system_date > currentRowDate) {
-    return "";
-  } else {
-    return parseFloat(item.Total) * parseFloat(item.DF);
-  }
-
-  // try {
-  //   let a;
-  //   if (item.StartDate === "") {
-  //     a = "";
-  //   } else {
-  //     a = item.Total * item.DF;
-  //   }
-
-  //   let result;
-  //   if (system_date > item.RecordDate) {
-  //     result = a - item.Total;
-  //   } else {
-  //     result = a;
-  //   }
-
-  //   return result;
-  // } catch (error) {
+  // if (item.StartDate === "") {
   //   return "";
   // }
+
+  // const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  // const valueDate = new Date(system_date);
+  // valueDate.setDate(valueDate.getDate() - 1);
+
+  // if (item.Total < 0 || system_date > currentRowDate) {
+  //   return "";
+  // } else {
+  //   return parseFloat(item.Total) * parseFloat(item.DF);
+  // }
+
+  // const a = !item.StartDate ? "" : item.Total * item.DF;
+
+  // return a ? (system_date > item.RecordDate ? a - item.Total : a) : "";
+
+  try {
+    let a;
+    if (!item.StartDate) {
+      a = "";
+    } else {
+      a = item.Total * item.DF;
+    }
+
+    let result;
+    if (system_date > item.RecordDate) {
+      result = a - item.Total;
+    } else {
+      result = a;
+    }
+
+    return result;
+  } catch (error) {
+    return "";
+  }
 };
 
 // exports.CalculateIntAccPerDay = async () => {
