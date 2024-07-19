@@ -778,12 +778,11 @@ app.post(
               const date = utils.excelToJSDate(item.Date);
 
               // lip date - filter exact and next smaller date from redempltion
-              if (
-                date <= valueDate &&
-                lipDate < date &&
-                item.SubSecCode === subsecCode
-              ) {
-                lipDate = date;
+             
+              if (date > system_date && item.SubSecCode === subsecCode) {
+                if (lipDate < system_date) {
+                  lipDate = date;
+                } 
               }
 
               // nip date - filter exact and next larger date [redempltion] from system_date [current]
