@@ -779,8 +779,8 @@ app.post(
 
               // lip date - filter exact and next smaller date from redempltion
              
-              if (date > system_date && item.SubSecCode === subsecCode) {
-                if (lipDate < system_date) {
+              if (date <= valueDate && item.SubSecCode === subsecCode) {
+                if (lipDate < date) {
                   lipDate = date;
                 } 
               }
