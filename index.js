@@ -16,6 +16,8 @@ const systemDateModel = require("./model/systemDateModel");
 // const transactionModel = require("./model/transactionModel");
 // const secInfoModel = require("./model/secInfoModel");
 
+
+
 // Enable CORS for all requests
 app.use(cors());
 app.use(express.json());
@@ -26,6 +28,12 @@ const upload = multer({ storage: storage });
 
 // Connect to MongoDB
 connectDB();
+
+const moment = require('moment');
+
+function formatDate(date) {
+  return moment(date).format('DD-MMM-YYYY');
+}
 
 app.post("/download", async (req, res) => {
   try {
@@ -567,7 +575,8 @@ app.post(
             (item) =>
               stockmaster.find(
                 (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-              ) && utils.excelToJSDate(item.Date) >= system_date
+              ) 
+              // && utils.excelToJSDate(item.Date) >= system_date
           )
           .map(async (item, index) => {
             const ytmvalues = stockmaster.filter(
@@ -777,8 +786,6 @@ app.post(
               const item = calculatedData[index];
               const date = utils.excelToJSDate(item.Date);
 
-              // lip date - filter exact and next smaller date from redempltion
-             
               if (date <= valueDate && item.SubSecCode === subsecCode) {
                 if (lipDate < date) {
                   lipDate = date;
@@ -1114,8 +1121,9 @@ app.post(
 
             return {
               SubSecCode: subsecCode,
-              ValuationDate: valueDate,
-              SystemDate: system_date,
+              // ValuationDate: valueDate,
+              ValuationDate: formatDate(valueDate),
+              SystemDate: formatDate(system_date),
               SecCode: item.SecurityCode,
               ISIN: item.ISIN,
               SecurityName: item.SecurityDescription,
@@ -1123,11 +1131,11 @@ app.post(
               FaceValue: faceValue,
               CouponRate,
               CouponType: item.CouponType,
-              LIPDate: lipDate,
-              NIPDate: nipDate,
-              RecordDate: recordDate,
-              NIPDateForSettlement: nipdateforsettlement,
-              LIPDateForSettlement: lipdateforsettlement,
+              LIPDate: formatDate(lipDate),
+              NIPDate: formatDate(nipDate),
+              RecordDate: formatDate(recordDate),
+              NIPDateForSettlement: formatDate(nipdateforsettlement),
+              LIPDateForSettlement: formatDate(lipdateforsettlement),
               DCB: dcb,
               IntAccPerDay: intaccperday,
               DirtyPriceForSettlement,
@@ -1135,8 +1143,8 @@ app.post(
               CleanPriceforSettlement,
               Priceper100,
               FaceValueForValuation,
-              MaturityDate: Maturity_Date,
-              LipDateForValuation,
+              MaturityDate: formatDate(Maturity_Date),
+              LipDateForValuation: formatDate(LipDateForValuation),
               DirtyPriceForValuation,
               PrincipalRedemptionSinceLIP,
               IntAccPerDayForValuation: intaccsincelipforvaluation,
@@ -1285,6 +1293,7 @@ app.post(
       );
 
       // return res.json({ status: true, data: stockmaster1 });
+    //  return res.json({ status: true, stockmaster: stockmaster1, subsecinfo: stockmaster1 });
 
       await systemDateModel.findOneAndUpdate(
         {
@@ -1316,7 +1325,10 @@ app.post(
         }
       }
 
+
+    //  return res.json({ status: true, stockmaster: stockmaster, subsecinfo: stockmaster });
       CGStmt = await Promise.all(
+
         stockmaster1.map(async (item, index) => {
           let {
             ClientCode,
@@ -1356,7 +1368,7 @@ app.post(
           let buyquantity = stockmaster1
             .filter(
               (item) =>
-                item.ClientCode === ClientCode &&
+                // item.ClientCode === ClientCode &&
                 item.SecurityCode === SecurityCode &&
                 item.EventType === "FL_PUR"
             )
@@ -1365,12 +1377,16 @@ app.post(
           let sellquantity = stockmaster1
             .filter(
               (item) =>
-                item.ClientCode === ClientCode &&
+                // item.ClientCode === ClientCode &&
                 item.SecurityCode === SecurityCode &&
                 item.EventType === "FL_SAL" &&
                 new Date(item.SettlementDate) <= new Date(system_date)
             )
             .map((item) => item.Quantity);
+
+            console.log("buy", buyquantity);
+            console.log("sale", sellquantity);
+
 
           let i = 0;
           let buy = 0;
@@ -1519,6 +1535,9 @@ app.post(
       );
 
       // console.log(CGStmt);
+
+    //  return res.json({ status: true, stockmaster: CGStmt, subsecinfo: result });
+    
 
       for (let index = 0; index < stockmaster1.length; index++) {
         const item = stockmaster1[index];
