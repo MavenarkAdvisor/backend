@@ -187,7 +187,6 @@ exports.calculateStartDateForValue = async (item, index, data, system_date) => {
 
   // if (item.Total < 0 || currentRowDate <= system_date) {
   if (item.Total < 0 || currentRowDate <= valueDate) {
-
     return "";
   } else {
     return system_date > prevDate ? system_date : prevDate;
@@ -215,6 +214,10 @@ exports.calculatePVMOdify = async (item, index, data, system_date) => {
   // return a ? (system_date > item.RecordDate ? a - item.Total : a) : "";
 
   try {
+    if (item.StartDate === "") {
+      return "";
+    }
+
     let a;
     if (!item.StartDate) {
       a = "";
