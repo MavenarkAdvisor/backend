@@ -8,47 +8,234 @@ exports.readExcelFile = async (buffer) => {
   return xlsx.utils.sheet_to_json(sheet);
 };
 
-// ------------------------------------------------------------------------
-// // initial DF=1.00
-// exports.DF = async () => {
-//     const prevDF = data[index - 1]?.DF
-//     const data = prevDF / Math.pow((1 + testYTM), (prevDate - date) / dcb);
-//     return dcb === "" ? 0 : data;
-//   };
+// -------------------------------------------------------------
 
-// // ------------------------------------------------------------------------
+exports.joinDataArrays = (array1, array2, property) => {
+  const joinedData = [];
+  for (let item1 of array1) {
+    for (let item2 of array2) {
+      if (item1[property] === item2[property]) {
+        joinedData.push({ ...item1, ...item2 });
+      }
+    }
+  }
+  return joinedData;
+};
 
-// exports.PV = Total * DF;
+exports.excelToJSDate = (serial) => new Date((serial - 25569) * 86400 * 1000);
+exports.JSToExcelDate = (newdate) => {
+  const date = new Date(newdate);
+  return Math.floor(date.getTime() / 86400 / 1000) + 25569;
+};
 
-// ------------------------------------------------------------------------
-const testYTM = 0.01;
+exports.calculateDFForValuation = async (item, index, data, system_date) => {
+  if (item.PrevCfDate == "") {
+    return parseFloat(1).toFixed(16);
+  }
 
-const InitialYTMDifferential = 0.01;
+  const prevDFForValuation = data[index - 1]?.DFForValuation
+    ? data[index - 1].DFForValuation
+    : 1.0;
 
-const InitialYTM = data[index - 1]?.prevEndYTM; //from 2nd row
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+  const YTM = parseFloat(item.YTM);
+  const daysToPrevCF =
+    (currentRowDate - item.StartDateForValue) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-// ------------------------------------------------------------------------
+  if (item.Total < 0 || system_date > currentRowDate) {
+    return 1.0;
+  } else {
+    return prevDFForValuation / Math.pow(1 + YTM, daysToPrevCF / item.DCB);
+  }
+};
 
-exports.YTMDifferential = async () => {
-  if (prevChangeInDifference === "NA") {
-    return prevYTMDifferential / 2;
-  } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
-    return InitialYTMDifferential;
-  } else if (Math.abs(prevChangeInDifference) < 0.1) {
-    return prevYTMDifferential / 10;
+exports.calculatePVForValuation = async (item, system_date) => {
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
+
+  if (item.Total < 0 || valueDate > currentRowDate) {
+    return "";
+  } else {
+    return parseFloat(item.Total) * parseFloat(item.DFForValuation);
+  }
+};
+
+exports.calculatePV = async (item, system_date) => {
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
+
+  if (item.Total < 0 || valueDate > currentRowDate) {
+    return "";
+  } else {
+    return parseFloat(item.Total) * parseFloat(item.DFForValuation);
+  }
+};
+
+exports.calculateTenor = async (item, index, calculatedData, system_date) => {
+  // Calculate Weightage for each item
+
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+  const currRowStartDate = calculatedData[index]?.StartDateForValue
+    ? new Date(calculatedData[index].StartDateForValue)
+    : 1;
+
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
+
+  const prevTenor = calculatedData[index - 1]?.Tenor
+    ? calculatedData[index - 1].Tenor
+    : 0.0;
+
+  const daysDiff = (currentRowDate - currRowStartDate) / (1000 * 60 * 60 * 24);
+
+  if (item.Total < 0 || valueDate > currentRowDate) {
+    return 0.0;
+  } else {
+    return prevTenor + daysDiff / item.DCB;
+  }
+};
+
+exports.calculateMacaulayDuration = async (item) => {
+  return item.Weightage === ""
+    ? ""
+    : (parseFloat(item.Weightage.split("%")[0]) * item.Tenor) / 100;
+};
+
+const isWeekday = (date) => {
+  const day = date.getDay();
+  // Sunday (0) and Saturday (6) are not weekdays
+  return day !== 0 && day !== 6;
+};
+
+const subtractWorkdays = (date, daysToSubtract) => {
+  let currentDate = new Date(date);
+  let workdaysCount = 0;
+
+  while (workdaysCount < daysToSubtract) {
+    // Move to the previous day
+    currentDate.setDate(currentDate.getDate() - 1);
+
+    // Check if the new date is a weekday
+    if (isWeekday(currentDate)) {
+      workdaysCount++;
+    }
+  }
+
+  return currentDate;
+};
+
+exports.calculateRecordDateModify = async (item) => {
+  if (item.Total < 0) {
+    return "";
+  }
+  const interestType = item["RDType"];
+  const date = new Date((item.Date - 25569) * 86400 * 1000);
+  const daysOffset = item["RDDays"];
+
+  if (interestType === "") {
+    return ""; // Return empty string if Interest is less than 0
+  }
+
+  if (interestType === "Business") {
+    // Calculate Record Date using WORKDAY function for Business type
+    const recordDate = subtractWorkdays(date, daysOffset);
+    return recordDate;
+  } else {
+    // Calculate Record Date for Calendar type
+    const recordDate = new Date(date);
+    recordDate.setDate(recordDate.getDate() - daysOffset);
+    return recordDate;
+  }
+};
+
+exports.calculateStartDate = async (item, index, data, system_date) => {
+  if (index === 0) {
+    return "";
+  }
+
+  const prevDate = data[index - 1]?.Date
+    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
+    : 1;
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
+
+  if (item.Total < 0 || currentRowDate <= valueDate) {
+    return "";
   } else {
     return system_date > prevDate ? system_date : prevDate;
   }
 };
 
-// ------------------------------------------------------------------------
+exports.calculateStartDateForValue = async (item, index, data, system_date) => {
+  if (index === 0) {
+    return "";
+  }
 
-exports.AdjustedYTMDifferential =
-  YTMDifferential * (OldDifference < 0 ? -1 : 1);
+  const prevDate = data[index - 1]?.Date
+    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
+    : 1;
+  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
 
-// ------------------------------------------------------------------------
+  const valueDate = new Date(system_date);
+  valueDate.setDate(valueDate.getDate() - 1);
 
-exports.ModifiedYTM = InitialYTM + AdjustedYTMDifferential;
+  if (item.Total < 0 || currentRowDate <= system_date) {
+    return "";
+  } else {
+    return system_date > prevDate ? system_date : prevDate;
+  }
+};
+
+exports.calculatePVMOdify = async (item, index, data, system_date) => {
+  // if (item.StartDate === "") {
+  //   return "";
+  // }
+
+  // const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  // const valueDate = new Date(system_date);
+  // valueDate.setDate(valueDate.getDate() - 1);
+
+  // if (item.Total < 0 || system_date > currentRowDate) {
+  //   return "";
+  // } else {
+  //   return parseFloat(item.Total) * parseFloat(item.DF);
+  // }
+
+  // const a = !item.StartDate ? "" : item.Total * item.DF;
+
+  // return a ? (system_date > item.RecordDate ? a - item.Total : a) : "";
+
+  try {
+    let a;
+    if (!item.StartDate) {
+      a = "";
+    } else {
+      a = item.Total * item.DF;
+    }
+
+    let result;
+    if (system_date > item.RecordDate) {
+      result = a - item.Total;
+    } else {
+      result = a;
+    }
+
+    return result;
+  } catch (error) {
+    return "";
+  }
+};
+
+// exports.CalculateIntAccPerDay = async () => {
+
+// };
 
 // ----------------------------------------------------------------
 

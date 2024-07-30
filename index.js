@@ -27,12 +27,6 @@ const upload = multer({ storage: storage });
 // Connect to MongoDB
 connectDB();
 
-const moment = require('moment');
-
-function formatDate(date) {
-  return moment(date).format('DD-MMM-YYYY');
-}
-
 app.post("/download", async (req, res) => {
   try {
     let { from, to } = req.body;
@@ -329,6 +323,236 @@ app.post(
         stockmaster[index].SucuritySubCode = SucuritySubCode;
       }
 
+      // const stockmaster = await Promise.all(
+      //   stockmaster.map(async (item, index) => {
+      //     let {
+      //       ClientCode,
+      //       ClientName,
+      //       EventType,
+      //       TradeDate,
+      //       SettlementDate,
+      //       SecurityCode,
+      //       Quantity,
+      //       Rate,
+      //       InterestPerUnit,
+      //       StampDuty,
+      //     } = item;
+
+      //     TradeDate = utils.excelToJSDate(TradeDate);
+      //     SettlementDate = utils.excelToJSDate(SettlementDate);
+
+      //     let YTM = 0.0;
+
+      //     console.log(
+      //       new Date(system_date).toString() >=
+      //         new Date(SettlementDate).toString()
+      //     );
+      //     if (
+      //       new Date(system_date).toString() >=
+      //       new Date(SettlementDate).toString()
+      //     ) {
+      //       const prevYTMobj = stockmaster.find(
+      //         (obj) => SecurityCode === obj.SecurityCode && obj.YTM
+      //       );
+
+      //       if (prevYTMobj) {
+      //         YTM = prevYTMobj.YTM;
+      //       } else {
+      //         let filterarray = data.filter(
+      //           (obj) =>
+      //             obj.SecurityCode === SecurityCode &&
+      //             utils.excelToJSDate(obj.Date) > SettlementDate
+      //         );
+      //         if (InterestPerUnit < 0) {
+      //           filterarray = filterarray.slice(1);
+      //         }
+
+      //         const maparray = filterarray.map((obj) => {
+      //           return {
+      //             Date: utils.excelToJSDate(obj.Date),
+      //             Total: obj.Total,
+      //             DCB: obj.DCB,
+      //           };
+      //         });
+
+      //         let ytmarray = [
+      //           {
+      //             Date: SettlementDate,
+      //             Total: (Rate + InterestPerUnit) * -1,
+      //             DF: 1.0,
+      //           },
+      //           ...maparray,
+      //         ];
+
+      //         let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
+
+      //         let defaultInitialYTM = 0.01;
+      //         let defaultYTMdifferential = 0.01;
+      //         let i = 0;
+      //         do {
+      //           const InitialYTM = defaultInitialYTM;
+
+      //           ytmvalues[i].InitialYTM = InitialYTM;
+
+      //           const YTMdifferential = defaultYTMdifferential;
+
+      //           ytmvalues[i].YTMdifferential = YTMdifferential;
+
+      //           for (let index = 0; index < ytmarray.length; index++) {
+      //             const item = ytmarray[index];
+
+      //             if (index > 0) {
+      //               const dayDiff =
+      //                 (ytmarray[index].Date - ytmarray[index - 1].Date) /
+      //                 (1000 * 60 * 60 * 24);
+      //               ytmarray[index].DF =
+      //                 item.DCB === ""
+      //                   ? 0
+      //                   : ytmarray[index - 1].DF /
+      //                     Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+      //             }
+
+      //             ytmarray[index].PV =
+      //               ytmarray[index].Total * ytmarray[index].DF;
+      //           }
+
+      //           const OldDifference = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.PV,
+      //             0
+      //           );
+
+      //           ytmvalues[i].OldDifference = parseFloat(
+      //             OldDifference.toFixed(2)
+      //           );
+
+      //           const AdjustedYTMDifferential =
+      //             OldDifference < 0
+      //               ? ytmvalues[i].YTMdifferential * -1
+      //               : ytmvalues[i].YTMdifferential;
+      //           ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
+
+      //           ytmvalues[i].ModifiedYTM =
+      //             ytmvalues[i].InitialYTM +
+      //             ytmvalues[i].AdjustedYTMDifferential;
+
+      //           const ModifiedYTM = ytmvalues[i].ModifiedYTM;
+
+      //           for (let index = 0; index < ytmarray.length; index++) {
+      //             const item = ytmarray[index];
+
+      //             if (index > 0) {
+      //               const dayDiff =
+      //                 (ytmarray[index].Date - ytmarray[index - 1].Date) /
+      //                 (1000 * 60 * 60 * 24);
+
+      //               ytmarray[index].DF =
+      //                 item.DCB === ""
+      //                   ? 0
+      //                   : ytmarray[index - 1].DF /
+      //                     Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+      //             }
+
+      //             ytmarray[index].PV =
+      //               ytmarray[index].Total * ytmarray[index].DF;
+      //           }
+
+      //           const NewDifference = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.PV,
+      //             0
+      //           );
+
+      //           ytmvalues[i].NewDifference = parseFloat(
+      //             NewDifference.toFixed(2)
+      //           );
+
+      //           const ChangeInYTM =
+      //             OldDifference > 0 === NewDifference > 0
+      //               ? ModifiedYTM - InitialYTM
+      //               : "NA";
+
+      //           ytmvalues[i].ChangeInYTM = ChangeInYTM;
+
+      //           const ChangeInDiff =
+      //             ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
+
+      //           ytmvalues[i].ChangeInDiff = ChangeInDiff;
+
+      //           const RequiredChangeInDiff =
+      //             ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
+
+      //           ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
+
+      //           const RequiredChangeYTM =
+      //             ChangeInYTM === "NA"
+      //               ? "NA"
+      //               : isNaN(ChangeInDiff) || ChangeInDiff === 0
+      //               ? 0
+      //               : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+
+      //           ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
+
+      //           const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
+      //           const EndYTMv2 =
+      //             RequiredChangeYTM === "NA"
+      //               ? InitialYTM
+      //               : InitialYTM + RequiredChangeYTM;
+      //           const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
+
+      //           ytmvalues[i].EndYTM = EndYTM;
+
+      //           defaultInitialYTM = EndYTM;
+
+      //           const SumOfTotal = ytmarray.reduce(
+      //             (accumulator, currentobj) => accumulator + currentobj.Total,
+      //             0
+      //           );
+      //           if (ChangeInDiff === "NA") {
+      //             defaultYTMdifferential = YTMdifferential / 2;
+      //           } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
+      //             defaultYTMdifferential = YTMdifferential;
+      //           } else if (Math.abs(ChangeInDiff) < 0.1) {
+      //             defaultYTMdifferential = YTMdifferential;
+      //           } else {
+      //             defaultYTMdifferential = YTMdifferential / 10;
+      //           }
+
+      //           ytmvalues.push({ InitialYTM: EndYTM });
+
+      //           i++;
+      //         } while (
+      //           ytmvalues[i - 1].OldDifference > 0 ||
+      //           ytmvalues[i - 1].NewDifference > 0 ||
+      //           ytmvalues[i - 1].OldDifference < 0 ||
+      //           ytmvalues[i - 1].NewDifference < 0
+      //         );
+
+      //         if (ytmvalues[i - 1].OldDifference <= 0) {
+      //           YTM = ytmvalues[i - 1].InitialYTM;
+      //         } else if (ytmvalues[i - 1].NewDifference <= 0) {
+      //           YTM = ytmvalues[i - 1].ModifiedYTM;
+      //         }
+      //       }
+      //     }
+
+      //     const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+
+      //     return {
+      //       ClientCode,
+      //       ClientName,
+      //       EventType,
+      //       TradeDate,
+      //       SettlementDate,
+      //       SecurityCode,
+      //       Quantity,
+      //       Rate,
+      //       InterestPerUnit,
+      //       StampDuty,
+      //       YTM,
+      //       SucuritySubCode,
+      //     };
+      //   })
+      // );
+
       // return res.json({
       //   status: true,
       //   stockmaster: stockmaster,
@@ -343,8 +567,7 @@ app.post(
             (item) =>
               stockmaster.find(
                 (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-              ) 
-              // && utils.excelToJSDate(item.Date) >= system_date
+              ) && utils.excelToJSDate(item.Date) >= system_date
           )
           .map(async (item, index) => {
             const ytmvalues = stockmaster.filter(
@@ -423,15 +646,13 @@ app.post(
         );
         calculatedData[index].PVForValuation = PVForValuation;
 
-        // const PV = await utils.calculatePVMOdify(
-        //   item,
-        //   index,
-        //   calculatedData,
-        //   system_date
-        // );
-        // calculatedData[index].PV = PV;
-
-        // console.log("PV", PV);
+        const PV = await utils.calculatePVMOdify(
+          item,
+          index,
+          calculatedData,
+          system_date
+        );
+        calculatedData[index].PV = PV;
       }
 
       await utils.calculateWeightage(calculatedData); // calculating weightage
@@ -457,17 +678,6 @@ app.post(
 
         const recordDate = await utils.calculateRecordDateModify(item);
         calculatedData[index].RecordDate = recordDate;
-        // console.log(recordDate);
-
-        const PV = await utils.calculatePVMOdify(
-          item,
-          index,
-          calculatedData,
-          system_date
-        );
-        calculatedData[index].PV = PV;
-
-        // console.log("PV", PV);
       }
 
       for (let index = 0; index < calculatedData.length; index++) {
@@ -567,10 +777,13 @@ app.post(
               const item = calculatedData[index];
               const date = utils.excelToJSDate(item.Date);
 
-              if (date <= valueDate && item.SubSecCode === subsecCode) {
-                if (lipDate < date) {
-                  lipDate = date;
-                } 
+              // lip date - filter exact and next smaller date from redempltion
+              if (
+                date <= valueDate &&
+                lipDate < date &&
+                item.SubSecCode === subsecCode
+              ) {
+                lipDate = date;
               }
 
               // nip date - filter exact and next larger date [redempltion] from system_date [current]
@@ -854,21 +1067,16 @@ app.post(
 
             //---------------------------------------------------------
 
-            // let PRDPrincipal = 0;
-            // let PRDPrincipal_date = new Date("0000-01-01");
-            // let PRDInterest = 0;
-            // let PRDInterest_date = new Date("0000-01-01");
-
             let PRDPrincipal = 0;
             let PRDPrincipal_date = new Date("0000-01-01");
             let PRDInterest = 0;
             let PRDInterest_date = new Date("0000-01-01");
 
-            if (system_date > recordDate) {
-              for (let index = 0; index < calculatedData.length; index++) {
-                const item = calculatedData[index];
-                const date = utils.excelToJSDate(item.Date);
+            for (let index = 0; index < calculatedData.length; index++) {
+              const item = calculatedData[index];
+              const date = utils.excelToJSDate(item.Date);
 
+              if (system_date > recordDate) {
                 if (date > system_date && item.SubSecCode === subsecCode) {
                   if (PRDPrincipal_date < system_date) {
                     PRDPrincipal_date = date;
@@ -878,53 +1086,22 @@ app.post(
                     PRDPrincipal = item.Principal;
                   }
                 }
+              }
 
-                //---------------------------------------------------------------
+              //---------------------------------------------------------------
 
+              if (system_date > recordDate) {
                 if (date > system_date && item.SubSecCode === subsecCode) {
-                  if (PRDInterest_date < system_date) {
+                  if (PRDPrincipal_date < system_date) {
                     PRDInterest_date = date;
-                    PRDInterest = item.Interest;
+                    PRDInterest = item.Principal;
                   } else if (PRDPrincipal_date > date) {
                     PRDInterest_date = date;
-                    PRDInterest = item.Interest;
+                    PRDInterest = item.Principal;
                   }
                 }
               }
             }
-
-            // const prd = new Date(system_date);
-            // prd.setDate(prd.getDate() + 1);
-
-            // for (let index = 0; index < calculatedData.length; index++) {
-            //   const item = calculatedData[index];
-            //   const date = utils.excelToJSDate(item.Date);
-
-              // if (system_date > recordDate) {
-              //   if (date > system_date && item.SubSecCode === subsecCode) {
-            //       if (PRDPrincipal_date < system_date) {
-            //         PRDPrincipal_date = date;
-            //         PRDPrincipal = item.Principal;
-            //       } else if (PRDPrincipal_date > date) {
-            //         PRDPrincipal_date = date;
-            //         PRDPrincipal = item.Principal;
-            //       }
-            //     }
-            //   }
-
-
-            //   if (system_date > recordDate) {
-            //     if (date > system_date && item.SubSecCode === subsecCode) {
-            //       if (PRDPrincipal_date < system_date) {
-            //         PRDInterest_date = date;
-            //         PRDInterest = item.Principal;
-            //       } else if (PRDPrincipal_date > date) {
-            //         PRDInterest_date = date;
-            //         PRDInterest = item.Principal;
-            //       }
-            //     }
-            //   }
-            // }
 
             const CleanPriceForPRDUnits = CleanPriceforValuation - PRDPrincipal;
 
@@ -938,9 +1115,8 @@ app.post(
 
             return {
               SubSecCode: subsecCode,
-              // ValuationDate: valueDate,
-              ValuationDate: formatDate(valueDate),
-              SystemDate: formatDate(system_date),
+              ValuationDate: valueDate,
+              SystemDate: system_date,
               SecCode: item.SecurityCode,
               ISIN: item.ISIN,
               SecurityName: item.SecurityDescription,
@@ -1110,7 +1286,6 @@ app.post(
       );
 
       // return res.json({ status: true, data: stockmaster1 });
-    //  return res.json({ status: true, stockmaster: stockmaster1, subsecinfo: stockmaster1 });
 
       await systemDateModel.findOneAndUpdate(
         {
@@ -1142,8 +1317,6 @@ app.post(
         }
       }
 
-
-    //  return res.json({ status: true, stockmaster: stockmaster, subsecinfo: stockmaster });
       CGStmt = await Promise.all(
         stockmaster1.map(async (item, index) => {
           let {
@@ -1199,10 +1372,6 @@ app.post(
                 new Date(item.SettlementDate) <= new Date(system_date)
             )
             .map((item) => item.Quantity);
-
-            console.log("buy", buyquantity);
-            console.log("sale", sellquantity);
-
 
           let i = 0;
           let buy = 0;
@@ -1351,9 +1520,6 @@ app.post(
       );
 
       // console.log(CGStmt);
-
-    //  return res.json({ status: true, stockmaster: CGStmt, subsecinfo: result });
-    
 
       for (let index = 0; index < stockmaster1.length; index++) {
         const item = stockmaster1[index];
