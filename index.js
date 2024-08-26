@@ -11,14 +11,18 @@ const connectDB = require("./config/connectMongo");
 const cashflowModel = require("./model/cashflowModel");
 const secDetailModel = require("./model/secDetailModel");
 const redemptionModel = require("./model/redemptionModel");
+const redemptionlatestModel = require("./model/redemptionlatestModel");
 const subsecinfoModel = require("./model/subsecinfoModel");
+const subsecinfolatestModel = require("./model/subsecinfolatestModel");
 const systemDateModel = require("./model/systemDateModel");
-// const transactionModel = require("./model/transactionModel");
+const transactionModel = require("./model/transactionModal");
+const { calculateresult } = require("./methods");
 // const secInfoModel = require("./model/secInfoModel");
 
 // Enable CORS for all requests
 app.use(cors());
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 
 // Set up multer for file uploads
 const storage = multer.memoryStorage();
@@ -63,1360 +67,1075 @@ app.post("/download", async (req, res) => {
     res.status(500).json({ status: false, message: error.message });
   }
 
+  // const newWorkbook = xlsx.utils.book_new();
+  // const newWorksheet = xlsx.utils.json_to_sheet(cleanResult);
+  // xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+  // Save the new workbook
+  // const outputPath = path.join("uploads", "output.xlsx");
+  // xlsx.writeFile(newWorkbook, outputPath);
+
+  // res.download(outputPath, "output.xlsx", (err) => {
+  //   if (err) {
+  //     return res.status(500).json({ error: "Failed to download file" });
+  //   }
+  //   // Clean up the uploaded file and the generated Excel file after download
+  //   fs.unlink(outputPath, () => {});
+  // });
 });
 
-app.post(
-  "/subsecinfo",
-  upload.fields([
-    { name: "file1", maxCount: 1 },
-    { name: "file2", maxCount: 1 },
-    { name: "file3", maxCount: 1 },
-  ]),
-  async (req, res) => {
-    try {
-      let { system_date, from, to } = req.body;
-      system_date = new Date(system_date);
-      from = new Date(from);
-      to = new Date(to);
+app.post("/cashflowupload", upload.single("file"), async (req, res) => {
+  try {
+    const data = await utils.readExcelFile(req.file.buffer);
 
-      const valueDate = new Date(system_date);
-      valueDate.setDate(valueDate.getDate() - 1);
-
-      const file1 = req.files["file1"][0];
-      const file2 = req.files["file2"][0];
-      const file3 = req.files["file3"][0];
-
-      const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
-      const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
-      const data1 = xlsx.utils.sheet_to_json(sheet1);
-
-      const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
-      const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
-      const data2 = xlsx.utils.sheet_to_json(sheet2);
-
-      const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
-      const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
-      const stockmaster = xlsx.utils.sheet_to_json(sheet3);
-
-      const data = utils.joinDataArrays(data1, data2, "SecurityCode");
-
-      console.log("System Date", system_date);
-
-      for (let index = 0; index < stockmaster.length; index++) {
-        const item = stockmaster[index];
-
-        let {
-          ClientCode,
-          ClientName,
-          EventType,
-          TradeDate,
-          SettlementDate,
-          SecurityCode,
-          Quantity,
-          Rate,
-          InterestPerUnit,
-          StampDuty,
-        } = item;
-
-        TradeDate = utils.excelToJSDate(TradeDate);
-        stockmaster[index].TradeDate = TradeDate;
-
-        SettlementDate = utils.excelToJSDate(SettlementDate);
-        stockmaster[index].SettlementDate = SettlementDate;
-
-        let YTM = 0.0;
-
-        // if (new Date(system_date) >= new Date(SettlementDate)) {
-        const prevYTMobj = stockmaster.find(
-          (obj) => SecurityCode === obj.SecurityCode && obj.YTM
-        );
-
-        if (prevYTMobj) {
-          YTM = prevYTMobj.YTM;
-        } else {
-          let filterarray = data.filter(
-            (obj) =>
-              obj.SecurityCode === SecurityCode &&
-              utils.excelToJSDate(obj.Date) > SettlementDate
-          );
-          if (InterestPerUnit < 0) {
-            filterarray = filterarray.slice(1);
-          }
-
-          const maparray = filterarray.map((obj) => {
-            return {
-              Date: utils.excelToJSDate(obj.Date),
-              Total: obj.Total,
-              DCB: obj.DCB,
-            };
-          });
-
-          let ytmarray = [
-            {
-              Date: SettlementDate,
-              Total: (Rate + InterestPerUnit) * -1,
-              DF: 1.0,
-            },
-            ...maparray,
-          ];
-
-          let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
-
-          let defaultInitialYTM = 0.01;
-          let defaultYTMdifferential = 0.01;
-          let i = 0;
-          do {
-            const InitialYTM = defaultInitialYTM;
-
-            ytmvalues[i].InitialYTM = InitialYTM;
-
-            const YTMdifferential = defaultYTMdifferential;
-
-            ytmvalues[i].YTMdifferential = YTMdifferential;
-
-            for (let index = 0; index < ytmarray.length; index++) {
-              const item = ytmarray[index];
-
-              if (index > 0) {
-                const dayDiff =
-                  (ytmarray[index].Date - ytmarray[index - 1].Date) /
-                  (1000 * 60 * 60 * 24);
-                ytmarray[index].DF =
-                  item.DCB === ""
-                    ? 0
-                    : ytmarray[index - 1].DF /
-                      Math.pow(1 + InitialYTM, dayDiff / item.DCB);
-              }
-
-              ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
-            }
-
-            const OldDifference = ytmarray.reduce(
-              (accumulator, currentobj) => accumulator + currentobj.PV,
-              0
-            );
-
-            ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(4));
-
-            const AdjustedYTMDifferential =
-              OldDifference < 0
-                ? ytmvalues[i].YTMdifferential * -1
-                : ytmvalues[i].YTMdifferential;
-            ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
-
-            ytmvalues[i].ModifiedYTM =
-              ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
-
-            const ModifiedYTM = ytmvalues[i].ModifiedYTM;
-
-            for (let index = 0; index < ytmarray.length; index++) {
-              const item = ytmarray[index];
-
-              if (index > 0) {
-                const dayDiff =
-                  (ytmarray[index].Date - ytmarray[index - 1].Date) /
-                  (1000 * 60 * 60 * 24);
-
-                ytmarray[index].DF =
-                  item.DCB === ""
-                    ? 0
-                    : ytmarray[index - 1].DF /
-                      Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
-              }
-
-              ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
-            }
-
-            const NewDifference = ytmarray.reduce(
-              (accumulator, currentobj) => accumulator + currentobj.PV,
-              0
-            );
-
-            ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(4));
-
-            const ChangeInYTM =
-              OldDifference > 0 === NewDifference > 0
-                ? ModifiedYTM - InitialYTM
-                : "NA";
-
-            ytmvalues[i].ChangeInYTM = ChangeInYTM;
-
-            const ChangeInDiff =
-              ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
-
-            ytmvalues[i].ChangeInDiff = ChangeInDiff;
-
-            const RequiredChangeInDiff =
-              ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
-
-            ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
-
-            const RequiredChangeYTM =
-              ChangeInYTM === "NA"
-                ? "NA"
-                : isNaN(ChangeInDiff) || ChangeInDiff === 0
-                ? 0
-                : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
-
-            ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
-
-            const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
-            const EndYTMv2 =
-              RequiredChangeYTM === "NA"
-                ? InitialYTM
-                : InitialYTM + RequiredChangeYTM;
-            const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
-
-            ytmvalues[i].EndYTM = EndYTM;
-
-            defaultInitialYTM = EndYTM;
-
-            const SumOfTotal = ytmarray.reduce(
-              (accumulator, currentobj) => accumulator + currentobj.Total,
-              0
-            );
-            if (ChangeInDiff === "NA") {
-              defaultYTMdifferential = YTMdifferential / 2;
-            } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
-              defaultYTMdifferential = YTMdifferential;
-            } else if (Math.abs(ChangeInDiff) < 0.1) {
-              defaultYTMdifferential = YTMdifferential;
-            } else {
-              defaultYTMdifferential = YTMdifferential / 10;
-            }
-
-            ytmvalues.push({ InitialYTM: EndYTM });
-
-            i++;
-          } while (
-            ytmvalues[i - 1].OldDifference > 0 ||
-            ytmvalues[i - 1].NewDifference > 0 ||
-            ytmvalues[i - 1].OldDifference < 0 ||
-            ytmvalues[i - 1].NewDifference < 0
-          );
-
-          if (ytmvalues[i - 1].OldDifference <= 0) {
-            YTM = ytmvalues[i - 1].InitialYTM;
-          } else if (ytmvalues[i - 1].NewDifference <= 0) {
-            YTM = ytmvalues[i - 1].ModifiedYTM;
-          }
+    const duplicates1 = await Promise.all(
+      data.map(async (item, i) => {
+        const res = await cashflowModel.findOne(item);
+        if (res) return true;
+        else {
+          return false;
         }
-        // }
-        stockmaster[index].YTM = YTM;
+      })
+    );
 
-        const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
-        stockmaster[index].SucuritySubCode = SucuritySubCode;
-      }
+    const uniquedocs1 = data.filter((obj, i) => !duplicates1[i]);
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: stockmaster,
-      //   subsecinfo: stockmaster,
-      // });
+    await cashflowModel.insertMany(uniquedocs1);
 
-      const calculatedData = await Promise.all(
-        data
-          .filter((item) =>
-            stockmaster.find(
-              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-            )
-          )
-          .map(async (item, index) => {
-            const ytmvalues = stockmaster.filter(
-              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-            );
-            const YTM = ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
+    res
+      .status(200)
+      .json({ status: true, message: "File uploaded successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
 
-            // const YTM = await utils.calculateYTM(item, index, data, system_date);
+app.post("/securityupload", upload.single("file"), async (req, res) => {
+  try {
+    const data = await utils.readExcelFile(req.file.buffer);
 
-            const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
+    // console.log(data);
+    const duplicates1 = await Promise.all(
+      data.map(async (item, i) => {
+        const res = await secDetailModel.findOne(item);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
 
-            const Interest = item.Interest;
+    const uniquedocs1 = data.filter((obj, i) => !duplicates1[i]);
 
-            const Principal = item.Principal;
+    await secDetailModel.insertMany(uniquedocs1);
 
-            const Total = item.Total;
+    res
+      .status(200)
+      .json({ status: true, message: "File uploaded successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
 
-            return {
-              ...item,
-              YTM,
-              SubSecCode,
-              Interest,
-              Principal,
-              Total,
-            };
-          })
+app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
+  try {
+    const data = await utils.readExcelFile(req.file.buffer);
+
+    // console.log(data);
+    const duplicates1 = await Promise.all(
+      data.map(async (item, i) => {
+        const res = await transactionModel.findOne(item);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniquedocs1 = data.filter((obj, i) => !duplicates1[i]);
+
+    await transactionModel.insertMany(uniquedocs1);
+
+    res
+      .status(200)
+      .json({ status: true, message: "File uploaded successfully" });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+app.post("/subsecinfo", async (req, res) => {
+  try {
+    // console.log(req.body);
+    let { system_date, from, to } = req.body;
+    system_date = new Date(system_date);
+    from = new Date(from);
+    to = new Date(to);
+
+    const valueDate = new Date(system_date);
+    valueDate.setDate(valueDate.getDate() - 1);
+
+    // const file1 = req.files["file1"][0];
+    // const file2 = req.files["file2"][0];
+    // const file3 = req.files["file3"][0];
+
+    // const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
+    // const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
+    // const data1 = xlsx.utils.sheet_to_json(sheet1);
+
+    const data12 = await cashflowModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const data1 = data12.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    // console.log(data1);
+    // console.log(data12[0]);
+
+    // const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
+    // const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
+    // const data2 = xlsx.utils.sheet_to_json(sheet2);
+
+    const data21 = await secDetailModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const data2 = data21.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    // console.log(data2[0]);
+    // console.log(data22[0]);
+
+    // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
+    // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
+    // const stockmaster = xlsx.utils.sheet_to_json(sheet3);
+
+    const data31 = await transactionModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const stockmaster = data31.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    const data = utils.joinDataArrays(data1, data2, "SecurityCode");
+
+    console.log("System Date", system_date);
+
+    // ------------ Calculating Ytm Stockmaster  --------------------
+    for (let index = 0; index < stockmaster.length; index++) {
+      const item = stockmaster[index];
+
+      let {
+        ClientCode,
+        ClientName,
+        EventType,
+        TradeDate,
+        SettlementDate,
+        SecurityCode,
+        Quantity,
+        Rate,
+        InterestPerUnit,
+        StampDuty,
+      } = item;
+
+      TradeDate = utils.excelToJSDate(TradeDate);
+      stockmaster[index].TradeDate = TradeDate;
+
+      SettlementDate = utils.excelToJSDate(SettlementDate);
+      stockmaster[index].SettlementDate = SettlementDate;
+
+      let YTM = 0.0;
+
+      // if (new Date(system_date) >= new Date(SettlementDate)) {
+      const prevYTMobj = stockmaster.find(
+        (obj) => SecurityCode === obj.SecurityCode && obj.YTM
       );
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: calculatedData,
-      //   subsecinfo: calculatedData,
-      // });
-
-      for (let index = 0; index < calculatedData.length; index++) {
-        const item = calculatedData[index];
-
-        const prevCFDate = await utils.calculatePrevCFDate(
-          item,
-          index,
-          calculatedData,
-          system_date
+      if (prevYTMobj) {
+        YTM = prevYTMobj.YTM;
+      } else {
+        let filterarray = data.filter(
+          (obj) =>
+            obj.SecurityCode === SecurityCode &&
+            utils.excelToJSDate(obj.Date) > SettlementDate
         );
-        calculatedData[index].prevCFDate = prevCFDate;
-
-        const StartDateForValue = await utils.calculateStartDateForValue(
-          item,
-          index,
-          calculatedData,
-          system_date
-        );
-        calculatedData[index].StartDateForValue = StartDateForValue;
-      }
-
-      // Calculate DF
-      for (let index = 0; index < calculatedData.length; index++) {
-        const item = calculatedData[index];
-
-        const StartDate = await utils.calculateStartDate(
-          item,
-          index,
-          calculatedData,
-          system_date
-        );
-        calculatedData[index].StartDate = StartDate;
-
-        const DF = await utils.calculateDF(item, index, calculatedData);
-        calculatedData[index].DF = parseFloat(DF).toFixed(16);
-
-        const DFForValuation = await utils.calculateDFForValuation(
-          item,
-          index,
-          calculatedData,
-          system_date
-        );
-        calculatedData[index].DFForValuation =
-          parseFloat(DFForValuation).toFixed(16);
-
-        const PVForValuation = await utils.calculatePVForValuation(
-          item,
-          system_date
-        );
-        calculatedData[index].PVForValuation = PVForValuation;
-      }
-
-      await utils.calculateWeightage(calculatedData); // calculating weightage
-
-      for (let index = 0; index < calculatedData.length; index++) {
-        const item = calculatedData[index];
-
-        const Tenor = await utils.calculateTenor(
-          item,
-          index,
-          calculatedData,
-          system_date
-        );
-        calculatedData[index].Tenor = Tenor;
-
-        const MacaulayDuration = await utils.calculateMacaulayDuration(item);
-        calculatedData[index].MacaulayDuration = MacaulayDuration;
-
-        if (MacaulayDuration === "") {
-          calculatedData[index].RDDays = "";
-          calculatedData[index].RDType = "";
+        if (InterestPerUnit < 0) {
+          filterarray = filterarray.slice(1);
         }
 
-        const recordDate = await utils.calculateRecordDateModify(item);
-        calculatedData[index].RecordDate = recordDate;
+        const maparray = filterarray.map((obj) => {
+          return {
+            Date: utils.excelToJSDate(obj.Date),
+            Total: obj.Total,
+            DCB: obj.DCB,
+          };
+        });
 
-        const PV = await utils.calculatePVMOdify(
-          item,
-          index,
-          calculatedData,
-          system_date
+        let ytmarray = [
+          {
+            Date: SettlementDate,
+            Total: (Rate + InterestPerUnit) * -1,
+            DF: 1.0,
+          },
+          ...maparray,
+        ];
+
+        let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
+
+        let defaultInitialYTM = 0.01;
+        let defaultYTMdifferential = 0.01;
+        let i = 0;
+        do {
+          const InitialYTM = defaultInitialYTM;
+
+          ytmvalues[i].InitialYTM = InitialYTM;
+
+          const YTMdifferential = defaultYTMdifferential;
+
+          ytmvalues[i].YTMdifferential = YTMdifferential;
+
+          for (let index = 0; index < ytmarray.length; index++) {
+            const item = ytmarray[index];
+
+            if (index > 0) {
+              const dayDiff =
+                (ytmarray[index].Date - ytmarray[index - 1].Date) /
+                (1000 * 60 * 60 * 24);
+              ytmarray[index].DF =
+                item.DCB === ""
+                  ? 0
+                  : ytmarray[index - 1].DF /
+                    Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+            }
+
+            ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
+          }
+
+          const OldDifference = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.PV,
+            0
+          );
+
+          ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(4));
+
+          const AdjustedYTMDifferential =
+            OldDifference < 0
+              ? ytmvalues[i].YTMdifferential * -1
+              : ytmvalues[i].YTMdifferential;
+          ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
+
+          ytmvalues[i].ModifiedYTM =
+            ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
+
+          const ModifiedYTM = ytmvalues[i].ModifiedYTM;
+
+          for (let index = 0; index < ytmarray.length; index++) {
+            const item = ytmarray[index];
+
+            if (index > 0) {
+              const dayDiff =
+                (ytmarray[index].Date - ytmarray[index - 1].Date) /
+                (1000 * 60 * 60 * 24);
+
+              ytmarray[index].DF =
+                item.DCB === ""
+                  ? 0
+                  : ytmarray[index - 1].DF /
+                    Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+            }
+
+            ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
+          }
+
+          const NewDifference = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.PV,
+            0
+          );
+
+          ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(4));
+
+          const ChangeInYTM =
+            OldDifference > 0 === NewDifference > 0
+              ? ModifiedYTM - InitialYTM
+              : "NA";
+
+          ytmvalues[i].ChangeInYTM = ChangeInYTM;
+
+          const ChangeInDiff =
+            ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
+
+          ytmvalues[i].ChangeInDiff = ChangeInDiff;
+
+          const RequiredChangeInDiff =
+            ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
+
+          ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
+
+          const RequiredChangeYTM =
+            ChangeInYTM === "NA"
+              ? "NA"
+              : isNaN(ChangeInDiff) || ChangeInDiff === 0
+              ? 0
+              : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+
+          ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
+
+          const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
+          const EndYTMv2 =
+            RequiredChangeYTM === "NA"
+              ? InitialYTM
+              : InitialYTM + RequiredChangeYTM;
+          const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
+
+          ytmvalues[i].EndYTM = EndYTM;
+
+          defaultInitialYTM = EndYTM;
+
+          const SumOfTotal = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.Total,
+            0
+          );
+          if (ChangeInDiff === "NA") {
+            defaultYTMdifferential = YTMdifferential / 2;
+          } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
+            defaultYTMdifferential = YTMdifferential;
+          } else if (Math.abs(ChangeInDiff) < 0.1) {
+            defaultYTMdifferential = YTMdifferential;
+          } else {
+            defaultYTMdifferential = YTMdifferential / 10;
+          }
+
+          ytmvalues.push({ InitialYTM: EndYTM });
+
+          i++;
+        } while (
+          ytmvalues[i - 1].OldDifference > 0 ||
+          ytmvalues[i - 1].NewDifference > 0 ||
+          ytmvalues[i - 1].OldDifference < 0 ||
+          ytmvalues[i - 1].NewDifference < 0
         );
-        calculatedData[index].PV = PV;
+
+        if (ytmvalues[i - 1].OldDifference <= 0) {
+          YTM = ytmvalues[i - 1].InitialYTM;
+        } else if (ytmvalues[i - 1].NewDifference <= 0) {
+          YTM = ytmvalues[i - 1].ModifiedYTM;
+        }
       }
+      // }
+      stockmaster[index].YTM = YTM;
 
-      for (let index = 0; index < calculatedData.length; index++) {
-        const item = calculatedData[index];
-      }
+      const SucuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+      stockmaster[index].SucuritySubCode = SucuritySubCode;
+    }
 
-      const redemption = calculatedData.map((item, index) => {
-        return {
-          SubSecCode: item.SubSecCode,
-          SecCode: item.SecurityCode,
-          ISIN: item.ISIN,
-          Date: item.Date,
-          Interest: item.Interest,
-          Principal: item.Principal,
-          Total: item.Total,
-          DCB: item.DCB,
-          YTM: item.YTM,
-          StartDateForValue: item.StartDateForValue,
-          DFForValuation: item.DFForValuation,
-          PVForValuation: item.PVForValuation,
-          Weightage: item.Weightage,
-          Tenor: item.Tenor,
-          MacaulayDuration: item.MacaulayDuration && item.MacaulayDuration,
-          RDDays: item.RDDays,
-          RDType: item.RDType,
-          RecordDate: item.RecordDate,
-          StartDate: item.StartDate,
-          DF: item.DF,
-          PV: item.PV,
-        };
-      });
+    //-----------------------------------------------------------------
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: redemption,
-      //   subsecinfo: redemption,
-      // });
+    // return res.json({
+    //   status: true,
+    //   stockmaster: stockmaster,
+    //   subsecinfo: stockmaster,
+    // });
 
-      // return res.json({ status: true, data: redemption });
-
-      const duplicatesredemption = await Promise.all(
-        redemption.map(async (data, i) => {
-          const res = await redemptionModel.findOne(data);
-          if (res) return true;
-          else {
-            return false;
-          }
-        })
-      );
-
-      const uniqueredemption = await Promise.all(
-        redemption.map(async (data, i) => {
-          if (!duplicatesredemption[i]) {
-            return data;
-          }
-        })
-      );
-      const updateduniqueredemption = uniqueredemption.filter((obj) => obj);
-
-      await redemptionModel.insertMany(updateduniqueredemption);
-
-      const result = await Promise.all(
-        data2
-          .filter((item) =>
-            stockmaster.find(
-              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-            )
+    const calculatedData = await Promise.all(
+      data
+        .filter((item) =>
+          stockmaster.find(
+            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
           )
-          .map(async (item, index) => {
-            // const ytm_value = item.CouponRate / 100;
+        )
+        .map(async (item, index) => {
+          const ytmvalues = stockmaster.filter(
+            (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
+          );
+          const YTM = ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
 
-            const ytmvalues = stockmaster.filter(
-              (obj) => obj.SecurityCode === item.SecurityCode && obj.YTM
-            );
+          // const YTM = await utils.calculateYTM(item, index, data, system_date);
 
-            const ytm_value =
-              ytmvalues && ytmvalues.length ? ytmvalues[0].YTM : 0.0;
+          const SubSecCode = item.SecurityCode + "_" + (YTM * 100).toFixed(2);
 
-            const subsecCode =
-              item.SecurityCode + "_" + (ytm_value * 100).toFixed(2);
+          const Interest = item.Interest;
 
-            const faceValue = calculatedData.reduce((total, curr) => {
-              return curr.SubSecCode === subsecCode &&
-                utils.excelToJSDate(curr.Date) > system_date
-                ? curr.Principal + total
-                : total;
-            }, 0.0);
+          const Principal = item.Principal;
 
-            const CouponRate = item.CouponRate / 100;
+          const Total = item.Total;
 
-            let lipDate = new Date("0000-01-01");
-            let nipDate = new Date("0000-01-01");
-            let recordDate = new Date("0000-01-01");
-            let recordDate_date = new Date("0000-01-01");
+          return {
+            ...item,
+            YTM,
+            SubSecCode,
+            Interest,
+            Principal,
+            Total,
+          };
+        })
+    );
 
-            for (let index = 0; index < calculatedData.length; index++) {
-              const item = calculatedData[index];
-              const date = utils.excelToJSDate(item.Date);
+    // return res.json({
+    //   status: true,
+    //   stockmaster: calculatedData,
+    //   subsecinfo: calculatedData,
+    // });
 
-              // lip date - filter exact and next smaller date from redempltion
-              if (
-                date <= valueDate &&
-                lipDate < date &&
-                item.SubSecCode === subsecCode
-              ) {
-                lipDate = date;
-              }
+    //-------- Calculating Redumption Data---------------------
 
-              // nip date - filter exact and next larger date [redempltion] from system_date [current]
+    for (let index = 0; index < calculatedData.length; index++) {
+      const item = calculatedData[index];
 
-              if (date > system_date && item.SubSecCode === subsecCode) {
-                if (nipDate < system_date) {
-                  nipDate = date;
-                } else if (nipDate > date) {
-                  nipDate = date;
-                }
-              }
+      const prevCFDate = await utils.calculatePrevCFDate(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].prevCFDate = prevCFDate;
 
-              // recorddate - filter exact and next larger RecordDate [redempltion] from system_date [current]
+      const StartDateForValue = await utils.calculateStartDateForValue(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].StartDateForValue = StartDateForValue;
+    }
+
+    // Calculate DF
+    for (let index = 0; index < calculatedData.length; index++) {
+      const item = calculatedData[index];
+
+      const StartDate = await utils.calculateStartDate(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].StartDate = StartDate;
+
+      const DF = await utils.calculateDF(item, index, calculatedData);
+      calculatedData[index].DF = parseFloat(DF).toFixed(16);
+
+      const DFForValuation = await utils.calculateDFForValuation(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].DFForValuation =
+        parseFloat(DFForValuation).toFixed(16);
+
+      const PVForValuation = await utils.calculatePVForValuation(
+        item,
+        system_date
+      );
+      calculatedData[index].PVForValuation = PVForValuation;
+    }
+
+    await utils.calculateWeightage(calculatedData); // calculating weightage
+
+    for (let index = 0; index < calculatedData.length; index++) {
+      const item = calculatedData[index];
+
+      const Tenor = await utils.calculateTenor(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].Tenor = Tenor;
+
+      const MacaulayDuration = await utils.calculateMacaulayDuration(item);
+      calculatedData[index].MacaulayDuration = MacaulayDuration;
+
+      if (MacaulayDuration === "") {
+        calculatedData[index].RDDays = "";
+        calculatedData[index].RDType = "";
+      }
+
+      const recordDate = await utils.calculateRecordDateModify(item);
+      calculatedData[index].RecordDate = recordDate;
+
+      const PV = await utils.calculatePVMOdify(
+        item,
+        index,
+        calculatedData,
+        system_date
+      );
+      calculatedData[index].PV = PV;
+    }
+
+    for (let index = 0; index < calculatedData.length; index++) {
+      const item = calculatedData[index];
+    }
+
+    const redemption = calculatedData.map((item, index) => {
+      return {
+        SubSecCode: item.SubSecCode,
+        SecCode: item.SecurityCode,
+        ISIN: item.ISIN,
+        Date: item.Date,
+        Interest: item.Interest,
+        Principal: item.Principal,
+        Total: item.Total,
+        DCB: item.DCB,
+        YTM: item.YTM,
+        StartDateForValue: item.StartDateForValue,
+        DFForValuation: item.DFForValuation,
+        PVForValuation: item.PVForValuation,
+        Weightage: item.Weightage,
+        Tenor: item.Tenor,
+        MacaulayDuration: item.MacaulayDuration && item.MacaulayDuration,
+        RDDays: item.RDDays,
+        RDType: item.RDType,
+        RecordDate: item.RecordDate,
+        StartDate: item.StartDate,
+        DF: item.DF,
+        PV: item.PV,
+      };
+    });
+
+    // return res.json({
+    //   status: true,
+    //   stockmaster: redemption,
+    //   subsecinfo: redemption,
+    // });
+
+    // return res.json({ status: true, data: redemption });
+
+    //Storing Redumption Data in db -----------------------------------------------------------
+
+    await redemptionlatestModel.deleteMany({});
+    await redemptionlatestModel.insertMany(redemption);
+
+    const duplicatesredemption = await Promise.all(
+      redemption.map(async (data, i) => {
+        const res = await redemptionModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniqueredemption = await Promise.all(
+      redemption.map(async (data, i) => {
+        if (!duplicatesredemption[i]) {
+          return data;
+        }
+      })
+    );
+    const updateduniqueredemption = uniqueredemption.filter((obj) => obj);
+
+    await redemptionModel.insertMany(updateduniqueredemption);
+
+    //----------------------------------------------------------------
+
+    const result = await calculateresult(
+      data2,
+      stockmaster,
+      calculatedData,
+      system_date,
+      valueDate
+    );
+
+    // --------- Store result Data------------------------------------------
+    await subsecinfolatestModel.deleteMany({});
+    await subsecinfolatestModel.insertMany(result);
+
+    const duplicatesresult = await Promise.all(
+      result.map(async (data, i) => {
+        const res = await subsecinfoModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniqueresult = await Promise.all(
+      result.map(async (data, i) => {
+        if (!duplicatesresult[i]) {
+          return data;
+        }
+      })
+    );
+
+    const updateduniqueresult = uniqueresult.filter((obj) => obj);
+    await subsecinfoModel.insertMany(updateduniqueresult);
+
+    //--------------------------------------------------------------------------
+
+    const allsubsecinfo = await subsecinfoModel.find({});
+
+    // return res.json({
+    //   status: true,
+    //   stockmaster: allsubsecinfo,
+    //   subsecinfo: allsubsecinfo,
+    // });
+
+    // -------- Processing Stockmaster Data -----------------------------------------
+
+    const stockmaster1 = await Promise.all(
+      stockmaster
+        .filter(
+          (item) => item.YTM && item.SettlementDate <= system_date
+          // &&
+          //   allsubsecinfo.find((obj) => obj.SecCode === item.SecurityCode)
+        )
+        .map(async (item, index) => {
+          let {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            YTM,
+            SucuritySubCode,
+          } = item;
+
+          let FaceValuePerUnit = 0;
+          for (let index = 0; index < allsubsecinfo.length; index++) {
+            const item = allsubsecinfo[index];
+            // const date = utils.excelToJSDate(item.Date);
+
+            if (
+              item.SystemDate.toISOString().split("T")[0] ===
+                SettlementDate.toISOString().split("T")[0] &&
+              item.SecCode === SecurityCode
+            ) {
+              FaceValuePerUnit = item.FaceValue;
+            }
+          }
+
+          const FaceValue =
+            EventType === "FI_RED"
+              ? Quantity * Rate
+              : Quantity * FaceValuePerUnit;
+
+          const CleanConsideration = Quantity * Rate;
+
+          const Amortisation = CleanConsideration - FaceValue;
+
+          const InterestAccrued = Quantity * InterestPerUnit;
+
+          const DirtyConsideration = CleanConsideration + InterestAccrued;
+
+          let TransactionNRD = "NA";
+
+          if (EventType !== "FI_RED") {
+            for (let index = 0; index < allsubsecinfo.length; index++) {
+              const item = allsubsecinfo[index];
 
               if (item.RecordDate) {
                 const RecordDate = new Date(item.RecordDate);
-                if (date > system_date && item.SubSecCode === subsecCode) {
-                  if (recordDate_date < system_date) {
-                    recordDate_date = date;
-                    recordDate = RecordDate;
-                  } else if (recordDate_date > date) {
-                    recordDate_date = date;
-                    recordDate = RecordDate;
-                  }
+
+                if (
+                  item.SystemDate.toISOString().split("T")[0] ===
+                    SettlementDate.toISOString().split("T")[0] &&
+                  item.SecCode === SecurityCode
+                ) {
+                  TransactionNRD = RecordDate;
                 }
               }
             }
-
-            let nipdateforsettlement = new Date("0000-01-01");
-
-            for (let index = 0; index < calculatedData.length; index++) {
-              const item = calculatedData[index];
-              const date = utils.excelToJSDate(item.Date);
-
-              if (system_date > recordDate) {
-                // nipdateforsettlement : filter exact and next larger Date [redempltion] than nipdate [current]
-                if (date > nipDate && item.SubSecCode === subsecCode) {
-                  if (nipdateforsettlement < nipDate) {
-                    nipdateforsettlement = date;
-                  } else if (nipdateforsettlement > date) {
-                    nipdateforsettlement = date;
-                  }
-                }
-              } else {
-                nipdateforsettlement = nipDate;
-              }
-            }
-
-            let lipdateforsettlement = new Date("0000-01-01");
-
-            let dcbdate = new Date("0000-01-01");
-            let dcb = 0;
-
-            for (let index = 0; index < calculatedData.length; index++) {
-              const item = calculatedData[index];
-              const date = utils.excelToJSDate(item.Date);
-
-              // lip date - filter exact and next smaller date from redempltion
-              if (
-                date < nipdateforsettlement &&
-                lipdateforsettlement < date &&
-                item.SubSecCode === subsecCode
-              ) {
-                lipdateforsettlement = date;
-              }
-
-              // dcb - find dbc from redemption which have exact and next large date [redempltion] than settlement date [current]
-
-              if (date >= system_date && item.SubSecCode === subsecCode) {
-                if (dcbdate < system_date) {
-                  dcbdate = date;
-                  dcb = item.DCB;
-                } else if (dcbdate > date) {
-                  dcbdate = date;
-                  dcb = item.DCB;
-                }
-              }
-            }
-
-            // calculate Int Acc per day ---------------------------------
-
-            const intaccperday_daysDiff =
-              (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
-
-            let intaccperday_a = (faceValue * CouponRate) / dcb;
-
-            let intaccperday_x = intaccperday_a * intaccperday_daysDiff;
-
-            let intaccperday_y = intaccperday_a * (intaccperday_daysDiff - 1);
-
-            let intaccperday_b =
-              Math.pow(1 + CouponRate, intaccperday_daysDiff / dcb - 1) *
-              faceValue;
-
-            let intaccperday_c =
-              Math.pow(1 + CouponRate, (intaccperday_daysDiff - 1) / dcb - 1) *
-              faceValue;
-
-            let intaccperday_d =
-              Math.pow(1 + CouponRate, 1 / dcb - 1) * faceValue;
-
-            let intaccperday =
-              item.CouponType === "S"
-                ? system_date === lipdateforsettlement
-                  ? intaccperday_a
-                  : intaccperday_x - intaccperday_y
-                : item.CouponType === "C"
-                ? system_date === lipdateforsettlement
-                  ? intaccperday_d
-                  : intaccperday_b - intaccperday_c
-                : "NA";
-
-            //------------------------------------------------------
-
-            // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
-            const DirtyPriceForSettlement = calculatedData.reduce(
-              (total, curr) => {
-                return curr.SubSecCode === subsecCode && curr.PV
-                  ? curr.PV + total
-                  : total;
-              },
-              0.0
-            );
-            //------------------------------------------------------
-
-            // calculate Int Acc per day for settlement-------------
-            const intaccperdayforsettlement_daysDiff =
-              (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
-
-            let intaccperdayforsettlement_a =
-              ((faceValue * CouponRate) / dcb) *
-              intaccperdayforsettlement_daysDiff;
-
-            let intaccperdayforsettlement_b =
-              (Math.pow(
-                1 + CouponRate,
-                intaccperdayforsettlement_daysDiff / dcb
-              ) -
-                1) *
-              faceValue;
-
-            const intaccperdayforsettlement =
-              item.CouponType === "S"
-                ? intaccperdayforsettlement_a
-                : intaccperdayforsettlement_b;
-
-            //---------------------------------------------------------------------
-
-            let CleanPriceforSettlement = 0.0;
-
-            let CleanPriceforSettlement_a =
-              DirtyPriceForSettlement - intaccperdayforsettlement;
-
-            // Check the condition and round accordingly
-            if (CleanPriceforSettlement_a < 100) {
-              // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a, 4);
-              CleanPriceforSettlement = parseFloat(
-                CleanPriceforSettlement_a.toFixed(4)
-              );
-            } else {
-              CleanPriceforSettlement = parseFloat(
-                CleanPriceforSettlement_a.toFixed(2)
-              );
-              // CleanPriceforSettlement = Math.round(CleanPriceforSettlement_a,2);
-            }
-
-            //---------------------------------------------------------------
-
-            let Priceper100_percentage =
-              (CleanPriceforSettlement / faceValue) * 100;
-
-            // Round the result to 4 decimal places
-            const Priceper100 =
-              Math.round(Priceper100_percentage * 10000) / 10000;
-
-            // ---------------------------------------------------------------
-
-            const FaceValueForValuation_valueDate = new Date(system_date);
-            FaceValueForValuation_valueDate.setDate(
-              FaceValueForValuation_valueDate.getDate() - 1
-            );
-
-            const FaceValueForValuation = calculatedData.reduce(
-              (total, curr) => {
-                return curr.SubSecCode === subsecCode &&
-                  utils.excelToJSDate(curr.Date) >
-                    FaceValueForValuation_valueDate
-                  ? curr.Principal + total
-                  : total;
-              },
-              0.0
-            );
-
-            //------------------------------------------
-
-            let Maturity_Date = new Date("0000-01-01");
-            calculatedData.forEach((curr) => {
-              if (
-                curr.SubSecCode === subsecCode &&
-                utils.excelToJSDate(curr.Date) > Maturity_Date
-              )
-                Maturity_Date = utils.excelToJSDate(curr.Date);
-            });
-
-            //-------------------------------------------------------------
-
-            let LipDateForValuation = new Date("0000-01-01");
-
-            for (let index = 0; index < calculatedData.length; index++) {
-              const item = calculatedData[index];
-              const date = utils.excelToJSDate(item.Date);
-
-              if (
-                date <= valueDate &&
-                LipDateForValuation < date &&
-                item.SubSecCode === subsecCode
-              ) {
-                LipDateForValuation = date;
-              }
-            }
-
-            const DirtyPriceForValuation = calculatedData.reduce(
-              (total, curr) => {
-                return curr.SubSecCode === subsecCode && curr.PVForValuation
-                  ? curr.PVForValuation + total
-                  : total;
-              },
-              0.0
-            );
-
-            const PrincipalRedemptionSinceLIP =
-              FaceValueForValuation - faceValue;
-
-            //---------------------------------------------------------------
-
-            const intaccsincelipforvaluation_daysDiff =
-              (valueDate - LipDateForValuation) / (1000 * 60 * 60 * 24);
-
-            const a =
-              ((FaceValueForValuation * CouponRate) / dcb) *
-              (intaccsincelipforvaluation_daysDiff + 1);
-
-            // Calculate 'b'
-            const b =
-              ((1 + CouponRate) **
-                ((intaccsincelipforvaluation_daysDiff + 1) / dcb) -
-                1) *
-              FaceValueForValuation;
-
-            // Determine the result based on the value of J5
-            let intaccsincelipforvaluation = 0.0;
-            if (item.CouponType === "S") {
-              intaccsincelipforvaluation = a;
-            } else if (item.CouponType === "C") {
-              intaccsincelipforvaluation = b;
-            } else {
-              intaccsincelipforvaluation = 0.0;
-            }
-
-            //---------------------------------------------------------------
-
-            let CleanPriceforValuation = 0.0;
-
-            let CleanPriceforValuation_a =
-              DirtyPriceForValuation -
-              PrincipalRedemptionSinceLIP -
-              intaccsincelipforvaluation;
-
-            // Check the condition and round accordingly
-            if (CleanPriceforValuation_a < 100) {
-              // CleanPriceforValuation = CleanPriceforValuation_a;
-              CleanPriceforValuation = parseFloat(
-                CleanPriceforValuation_a.toFixed(4)
-              );
-            } else {
-              CleanPriceforValuation = parseFloat(
-                CleanPriceforValuation_a.toFixed(2)
-              );
-              // CleanPriceforValuation = CleanPriceforValuation_a;
-            }
-
-            //---------------------------------------------------------
-
-            let PRDPrincipal = 0;
-            let PRDPrincipal_date = new Date("0000-01-01");
-            let PRDInterest = 0;
-            let PRDInterest_date = new Date("0000-01-01");
-
-            if (system_date > recordDate) {
-              for (let index = 0; index < calculatedData.length; index++) {
-                const item = calculatedData[index];
-                const date = utils.excelToJSDate(item.Date);
-
-                if (date > system_date && item.SubSecCode === subsecCode) {
-                  if (PRDPrincipal_date < system_date) {
-                    PRDPrincipal_date = date;
-                    PRDPrincipal = item.Principal;
-                  } else if (PRDPrincipal_date > date) {
-                    PRDPrincipal_date = date;
-                    PRDPrincipal = item.Principal;
-                  }
-                }
-
-                //---------------------------------------------------------------
-
-                if (date > system_date && item.SubSecCode === subsecCode) {
-                  if (PRDInterest_date < system_date) {
-                    PRDInterest_date = date;
-                    PRDInterest = item.Interest;
-                  } else if (PRDPrincipal_date > date) {
-                    PRDInterest_date = date;
-                    PRDInterest = item.Interest;
-                  }
-                }
-              }
-            }
-
-            const CleanPriceForPRDUnits = CleanPriceforValuation - PRDPrincipal;
-
-            const MacaulayDuration = calculatedData.reduce((total, curr) => {
-              return curr.SubSecCode === subsecCode && curr.PVForValuation
-                ? curr.MacaulayDuration + total
-                : total;
-            }, 0.0);
-
-            const ModifiedDuration = MacaulayDuration / (1 + ytm_value);
-
-            return {
-              SubSecCode: subsecCode,
-              ValuationDate: valueDate,
-              SystemDate: system_date,
-              SecCode: item.SecurityCode,
-              ISIN: item.ISIN,
-              SecurityName: item.SecurityDescription,
-              YTM: ytm_value,
-              FaceValue: faceValue,
-              CouponRate,
-              CouponType: item.CouponType,
-              LIPDate: lipDate,
-              NIPDate: nipDate,
-              RecordDate: recordDate,
-              NIPDateForSettlement: nipdateforsettlement,
-              LIPDateForSettlement: lipdateforsettlement,
-              DCB: dcb,
-              IntAccPerDay: intaccperday,
-              DirtyPriceForSettlement,
-              IntAccPerDayForSettlement: intaccperdayforsettlement,
-              CleanPriceforSettlement,
-              Priceper100,
-              FaceValueForValuation,
-              MaturityDate: Maturity_Date,
-              LipDateForValuation,
-              DirtyPriceForValuation,
-              PrincipalRedemptionSinceLIP,
-              IntAccPerDayForValuation: intaccsincelipforvaluation,
-              CleanPriceforValuation,
-              PRDPrincipal,
-              PRDInterest,
-              CleanPriceForPRDUnits,
-              MacaulayDuration,
-              ModifiedDuration,
-            };
-          })
-      );
-
-      // return res.json({
-      //   status: true,
-      //   stockmaster: result,
-      //   subsecinfo: result,
-      // });
-
-      const duplicatesresult = await Promise.all(
-        result.map(async (data, i) => {
-          const res = await subsecinfoModel.findOne(data);
-          if (res) return true;
-          else {
-            return false;
           }
-        })
-      );
 
-      const uniqueresult = await Promise.all(
-        result.map(async (data, i) => {
-          if (!duplicatesresult[i]) {
-            return data;
+          const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
+
+          let NextDueDate = new Date("0000-01-01");
+
+          for (let index = 0; index < allsubsecinfo.length; index++) {
+            const item = allsubsecinfo[index];
+
+            if (
+              item.SystemDate.toISOString().split("T")[0] ===
+                SettlementDate.toISOString().split("T")[0] &&
+              item.SecCode === SecurityCode
+            ) {
+              NextDueDate = item.NIPDate;
+            }
           }
+
+          const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
+
+          const UniqueCode = `${ClientCode}_${EventType}_${SecurityCode}_${index}`;
+
+          return {
+            ClientCode,
+            ClientName,
+            EventType,
+            TradeDate,
+            SettlementDate,
+            SecurityCode,
+            SucuritySubCode,
+            YTM,
+            Quantity,
+            Rate,
+            InterestPerUnit,
+            StampDuty,
+            FaceValuePerUnit,
+            FaceValue,
+            Amortisation,
+            CleanConsideration,
+            InterestAccrued,
+            DirtyConsideration,
+            TransactionNRD,
+            PRDFlag,
+            NextDueDate,
+            PRDHolding,
+            UniqueCode,
+          };
         })
+    );
+
+    // ----------------------------------------------------------------
+
+    // return res.json({
+    //   status: true,
+    //   stockmaster: stockmaster1,
+    //   subsecinfo: stockmaster1,
+    // });
+
+    // return res.json({ status: true, data: stockmaster1 });
+
+    await systemDateModel.findOneAndUpdate(
+      {
+        SystemDate: system_date,
+        ValuationDate: valueDate,
+      },
+      {
+        SystemDate: system_date,
+        ValuationDate: valueDate,
+      },
+      { upsert: true, new: true }
+    );
+
+    //-------------------- Calculating CGtmt Data  ------------------
+
+    let CGStmt = [];
+
+    for (let index = 0; index < stockmaster1.length; index++) {
+      // const item = stockmaster1[index];
+      let { UniqueCode, Quantity, EventType } = stockmaster1[index];
+
+      const SellBalancearr = CGStmt.filter(
+        (item) => item.SaleUniqueCode === UniqueCode
       );
 
-      const updateduniqueresult = uniqueresult.filter((obj) => obj);
-      await subsecinfoModel.insertMany(updateduniqueresult);
+      let SellBalance = 0;
+      if (EventType === "FI_SAL") {
+        let SellBalanceSum = SellBalancearr.reduce((sum, item) => {
+          return item.Quantity ? sum + item.Quantity : sum;
+        }, 0);
 
-      const allsubsecinfo = await subsecinfoModel.find({});
+        SellBalance = Quantity - SellBalanceSum;
+      } else {
+        SellBalance = 0;
+      }
 
-      // return res.json({ status: true, data: result });
+      stockmaster1[index].SellBalance = SellBalance;
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: allsubsecinfo,
-      //   subsecinfo: allsubsecinfo,
-      // });
-
-      const stockmaster1 = await Promise.all(
-        stockmaster
-          .filter(
-            (item) => item.YTM && item.SettlementDate <= system_date
-            // &&
-            //   allsubsecinfo.find((obj) => obj.SecCode === item.SecurityCode)
-          )
-          .map(async (item, index) => {
-            let {
-              ClientCode,
-              ClientName,
-              EventType,
-              TradeDate,
-              SettlementDate,
-              SecurityCode,
-              Quantity,
-              Rate,
-              InterestPerUnit,
-              StampDuty,
-              YTM,
-              SucuritySubCode,
-            } = item;
-
-            let FaceValuePerUnit = 0;
-            for (let index = 0; index < allsubsecinfo.length; index++) {
-              const item = allsubsecinfo[index];
-              // const date = utils.excelToJSDate(item.Date);
-
-              if (
-                item.SystemDate.toISOString().split("T")[0] ===
-                  SettlementDate.toISOString().split("T")[0] &&
-                item.SecCode === SecurityCode
-              ) {
-                FaceValuePerUnit = item.FaceValue;
-              }
-            }
-
-            const FaceValue =
-              EventType === "FI_RED"
-                ? Quantity * Rate
-                : Quantity * FaceValuePerUnit;
-
-            const CleanConsideration = Quantity * Rate;
-
-            const Amortisation = CleanConsideration - FaceValue;
-
-            const InterestAccrued = Quantity * InterestPerUnit;
-
-            const DirtyConsideration = CleanConsideration + InterestAccrued;
-
-            let TransactionNRD = "NA";
-
-            if (EventType !== "FI_RED") {
-              for (let index = 0; index < allsubsecinfo.length; index++) {
-                const item = allsubsecinfo[index];
-
-                if (item.RecordDate) {
-                  const RecordDate = new Date(item.RecordDate);
-
-                  if (
-                    item.SystemDate.toISOString().split("T")[0] ===
-                      SettlementDate.toISOString().split("T")[0] &&
-                    item.SecCode === SecurityCode
-                  ) {
-                    TransactionNRD = RecordDate;
-                  }
-                }
-              }
-            }
-
-            const PRDFlag = SettlementDate > TransactionNRD ? "Yes" : "";
-
-            let NextDueDate = new Date("0000-01-01");
-
-            for (let index = 0; index < allsubsecinfo.length; index++) {
-              const item = allsubsecinfo[index];
-
-              if (
-                item.SystemDate.toISOString().split("T")[0] ===
-                  SettlementDate.toISOString().split("T")[0] &&
-                item.SecCode === SecurityCode
-              ) {
-                NextDueDate = item.NIPDate;
-              }
-            }
-
-            const PRDHolding = SettlementDate >= NextDueDate ? "" : PRDFlag;
-
-            const UniqueCode = `${ClientCode}_${EventType}_${SecurityCode}_${index}`;
-
-            return {
-              ClientCode,
-              ClientName,
-              EventType,
-              TradeDate,
-              SettlementDate,
-              SecurityCode,
-              SucuritySubCode,
-              YTM,
-              Quantity,
-              Rate,
-              InterestPerUnit,
-              StampDuty,
-              FaceValuePerUnit,
-              FaceValue,
-              Amortisation,
-              CleanConsideration,
-              InterestAccrued,
-              DirtyConsideration,
-              TransactionNRD,
-              PRDFlag,
-              NextDueDate,
-              PRDHolding,
-              UniqueCode,
-            };
-          })
+      const BuyBalancearr = CGStmt.filter(
+        (item) => item.PurchaseUniqueCode === UniqueCode
       );
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: stockmaster1,
-      //   subsecinfo: stockmaster1,
-      // });
+      let BuyBalance = 0;
+      if (EventType === "FI_PUR") {
+        let BuyBalanceSum = BuyBalancearr.reduce((sum, item) => {
+          return item.Quantity ? sum + item.Quantity : sum;
+        }, 0);
 
-      // return res.json({ status: true, data: stockmaster1 });
+        BuyBalance = Quantity - BuyBalanceSum;
+      } else {
+        BuyBalance = 0;
+      }
 
-      await systemDateModel.findOneAndUpdate(
-        {
-          SystemDate: system_date,
-          ValuationDate: valueDate,
-        },
-        {
-          SystemDate: system_date,
-          ValuationDate: valueDate,
-        },
-        { upsert: true, new: true }
+      stockmaster1[index].BuyBalance = BuyBalance;
+    }
+
+    const OuterFilterArr = stockmaster1.filter(
+      (item) =>
+        new Date(item.SettlementDate).toISOString().split("T")[0] ===
+          new Date(system_date).toISOString().split("T")[0] &&
+        item.EventType === "FI_SAL"
+    );
+
+    // console.log(OuterFilterArr);
+
+    const OuterArr = OuterFilterArr.map((item) => {
+      const sellBalancearr = stockmaster1.find(
+        (obj) =>
+          new Date(item.SettlementDate).toISOString().split("T")[0] ===
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+          obj.EventType === "FI_SAL" &&
+          obj.ClientCode === item.ClientCode
       );
 
-      // let CGStmt = [];
+      let sellBalancesum = 0;
+      if (sellBalancearr && sellBalancearr.length > 0) {
+        sellBalancesum = sellBalancearr.reduce((total, item) => {
+          return item.SellBalance ? total + item.SellBalance : total;
+        }, 0);
+      }
 
-      // for (let index = 0; index < stockmaster1.length; index++) {
-      //   const item = stockmaster1[index];
+      return {
+        SettlementDate: item.SettlementDate,
+        ClientCode: item.ClientCode,
+        SecurityCode: item.SecurityCode,
+        looping: sellBalancesum,
+      };
+    });
 
-      //   const UniqueCode = `${item.ClientCode}_${item.EventType}_${item.SecurityCode}`;
+    let cgmtindex = 0;
 
-      //   const isPresent = CGStmt.find(
-      //     (item) =>
-      //       `${item.ClientCode}_${item.EventType}_${item.SecurityCode}` ===
-      //       UniqueCode
-      //   );
+    while (cgmtindex < OuterArr.length) {
+      const OuterObj = OuterArr[cgmtindex];
 
-      //   if (!isPresent) {
-      //     CGStmt.push(item);
-      //   }
-      // }
+      const ResultArr = stockmaster1.filter(
+        (item) =>
+          item.ClientCode === OuterObj.ClientCode &&
+          item.SecurityCode === OuterObj.SecurityCode
+      );
 
-      let CGStmt = [];
+      // console.log(ResultArr);
 
-      stockmaster1.forEach(async (item, index) => {
-        let {
-          ClientCode,
-          ClientName,
-          EventType,
-          TradeDate,
-          SettlementDate,
-          SecurityCode,
-          SucuritySubCode,
-          YTM,
-          Quantity,
-          Rate,
-          InterestPerUnit,
-          StampDuty,
-          FaceValuePerUnit,
-          FaceValue,
-          Amortisation,
-          CleanConsideration,
-          InterestAccrued,
-          DirtyConsideration,
-          TransactionNRD,
-          PRDFlag,
-          NextDueDate,
-          PRDHolding,
-          UniqueCode,
-        } = item;
+      // cgmtindex++;
 
-        const isPresent = CGStmt.find(
-          (item) =>
-            item.ClientCode === ClientCode && item.SecurityCode === SecurityCode
-        );
-        if (isPresent) {
-          return;
-        }
-
-        const subsecinfoobj = result.find(
-          (obj) => obj.SecCode === SecurityCode
-        );
-        const SecurityName = subsecinfoobj.SecurityName;
-
-        const ISIN = subsecinfoobj.ISIN;
-
-        //---------------------------------------
-
-        // console.log(ClientCode, SecurityCode);
-        let buyquantity = stockmaster1
+      const sellArray = ResultArr.flatMap((outerItem) =>
+        stockmaster1
           .filter(
-            (item) =>
-              item.ClientCode === ClientCode &&
-              item.SecurityCode === SecurityCode &&
-              item.EventType == "FI_PUR"
+            (stockItem) =>
+              stockItem.SettlementDate === outerItem.SettlementDate &&
+              stockItem.ClientCode === outerItem.ClientCode &&
+              stockItem.SecurityCode === outerItem.SecurityCode &&
+              stockItem.EventType === "FI_SAL" &&
+              stockItem.SellBalance > 0
           )
-          .map((item) => item.Quantity);
+          .map((stockItem) => ({
+            ClientCode: stockItem.ClientCode,
+            SecurityCode: stockItem.SecurityCode,
+            SucuritySubCode: stockItem.SucuritySubCode,
+            SalePrice: stockItem.Rate,
+            SaleDate: stockItem.SettlementDate,
+            SaleUniqueCode: stockItem.UniqueCode,
+            Sell: stockItem.SellBalance, //storing lasted the SellBalance value
+          }))
+      );
 
-        // console.log(ClientCode, "FI_PUR", SecurityCode, buyquantity);
+      // console.log(sellArray);
 
-        let sellquantity = stockmaster1
+      const buyArray = ResultArr.flatMap((outerItem) =>
+        stockmaster1
           .filter(
-            (item) =>
-              item.ClientCode === ClientCode &&
-              item.SecurityCode === SecurityCode &&
-              item.EventType === "FI_SAL" &&
-              new Date(item.SettlementDate) <= new Date(system_date)
+            (stockItem) =>
+              new Date(stockItem.SettlementDate) <=
+                new Date(outerItem.SettlementDate) &&
+              stockItem.ClientCode === outerItem.ClientCode &&
+              stockItem.SecurityCode === outerItem.SecurityCode &&
+              stockItem.EventType === "FI_PUR" &&
+              stockItem.BuyBalance > 0
           )
-          .map((item) => item.Quantity);
+          .map((stockItem) => ({
+            PurchaseDate: stockItem.SettlementDate,
+            PuchaseUniqueCode: stockItem.UniqueCode,
+            PuchaseSubSecCode: stockItem.SucuritySubCode,
+            Buy: stockItem.BuyBalance, //storing lasted the SellBalance value
+          }))
+      );
 
-        // console.log(ClientCode, "FI_SAL", SecurityCode, sellquantity);
+      // console.log(buyArray);
 
-        let i = 0;
-        let buy = 0;
-        let sell = 0;
-
+      sellArray.forEach(async (item, index) => {
+        let Quantity = 0;
+        let buy = buyArray[index].Buy;
+        let sell = item.Sell;
         let saleQty = 0;
         let puchaseQty = 0;
 
-        // console.log("Loop Start");
-        while (buyquantity.length >= i + 1 && sellquantity.length >= i + 1) {
-          buy = buyquantity[i];
-          sell = sellquantity[i];
+        if (buy > sell) {
+          Quantity = Math.min(sell, buy);
+          puchaseQty = buy - Quantity;
+          saleQty = 0;
+          // Quantity = finalbuy;
+        } else if (buy === sell) {
+          Quantity = Math.min(sell, buy);
+          puchaseQty = 0;
+          saleQty = 0;
+          // Quantity = finalsell;
+        } else if (buy < sell) {
+          Quantity = Math.min(sell, buy);
+          puchaseQty = 0;
+          saleQty = sell - Quantity;
+          // Quantity = finalsell;
+        }
 
-          console.log(buy, sell);
+        sellArray[index].Quantity = Quantity;
+        sellArray[index].saleQty = saleQty;
+        sellArray[index].puchaseQty = puchaseQty;
 
-          Quantity = Math.min(buy, sell);
+        const SaleDate = sellArray[index].SaleDate;
+        const PurchaseDate = buyArray[index].PurchaseDate;
+        const SecurityCode = sellArray[index].SecurityCode;
+        const SucuritySubCode = sellArray[index].SucuritySubCode;
+        const SalePrice = sellArray[index].SalePrice.toFixed(2);
 
-          // ----------- Purchase Date -----------
-
-          const PurchaseDateobj = stockmaster1.find(
-            (obj) =>
-              new Date(obj.SettlementDate) <= new Date(system_date) &&
-              obj.ClientCode === ClientCode &&
-              obj.SecurityCode === SecurityCode &&
-              obj.EventType === "FI_PUR" &&
-              obj.Sellbalance > 0
-          );
-
-          console.log(PurchaseDateobj);
-
-          const PurchaseDate = PurchaseDateobj
-            ? PurchaseDateobj?.SettlementDate
-            : SettlementDate;
-
-          // ----------- Sale Date -----------
-
-          const SaleDate =
-            EventType === "FI_SAL"
-              ? SettlementDate
-              : stockmaster1.find(
-                  (obj) =>
-                    new Date(obj.SettlementDate).toISOString().split("T")[0] ===
-                      new Date(system_date).toISOString().split("T")[0] &&
-                    obj.ClientCode === ClientCode &&
-                    obj.SecurityCode === SecurityCode &&
-                    obj.EventType === "FI_SAL"
-                  // obj.Buybalance > 0
-                )?.SettlementDate;
-
-          // ----------- Holding Period -----------
-          const Holdingperiod =
-            SaleDate && PurchaseDate
-              ? (SaleDate - PurchaseDate) / (1000 * 60 * 60 * 24)
-              : 0;
-
-          // ----------- Purchase Price -----------
-          const Purchasepriceobj = result.find(
-            (obj) =>
-              obj.SubSecCode === SucuritySubCode &&
-              new Date(obj.SystemDate).toISOString().split("T")[0] ===
-                new Date(SaleDate).toISOString().split("T")[0]
-          );
-
-          // console.log(Purchasepriceobj);
-          const Purchaseprice = Purchasepriceobj
-            ? Purchasepriceobj.CleanPriceforSettlement.toFixed(2)
+        // ----------- Holding Period -----------
+        const Holdingperiod =
+          SaleDate && PurchaseDate
+            ? (SaleDate - PurchaseDate) / (1000 * 60 * 60 * 24)
             : 0;
-          // value fetching in the priceMaster
 
-          const SalePriceObj = stockmaster1.find(
-            (obj) =>
-              obj.SucuritySubCode === SucuritySubCode &&
-              new Date(obj.SettlementDate).toISOString().split("T")[0] ===
-                new Date(SaleDate).toISOString().split("T")[0]
-          );
+        // ----------- Purchase Price -----------
+        const Purchasepriceobj = result.find(
+          (obj) =>
+            obj.SubSecCode === SucuritySubCode &&
+            new Date(obj.SystemDate).toISOString().split("T")[0] ===
+              new Date(SaleDate).toISOString().split("T")[0]
+        );
+        const Purchaseprice = Purchasepriceobj
+          ? Purchasepriceobj.CleanPriceforSettlement
+          : 0;
 
-          // console.log(SalePriceObj);
-          const Saleprice = SalePriceObj?.Rate ? SalePriceObj?.Rate : 0;
-          //from transaction
+        // ---------------PurchaseValue----------
+        const PurchaseValue = Purchaseprice * Quantity;
+        // -----------------SaleValue------------
+        const SaleValue = SalePrice * Quantity;
+        // -----------------CapitalGainLoss--------------
+        const CaptialGainLoss = SaleValue - PurchaseValue;
+        // ---------------ListingStatus-----------
 
-          // const Salepriceobj = result.find(
-          //   (obj) =>
-          //     obj.SubSecCode === SucuritySubCode &&
-          //     new Date(obj.SystemDate).toISOString().split("T")[0] ===
-          //       new Date(PurchaseDate).toISOString().split("T")[0]
-          // );
-          // const Saleprice = Purchasepriceobj ? Purchasepriceobj.rate : 0;
+        // console.log(SecurityCode);
+        const ListingStatusobj = data2.find(
+          (obj) => obj.SecurityCode === SecurityCode
+        );
 
-          const PurchaseValue = Purchaseprice * Quantity;
-          const SaleValue = Saleprice * Quantity;
+        // console.log(ListingStatusobj);
 
-          const CaptialGainLoss = SaleValue - PurchaseValue;
+        const ListingStatus = ListingStatusobj?.ListingStatus;
 
-          const ListingStatusobj = data2.find(
-            (obj) => obj.SecurityCode === SecurityCode
-          );
-          const ListingStatus = ListingStatusobj?.ListingStatus;
-
-          let CaptialGainType = "";
-          if (ListingStatus === "Listed") {
-            if (Holdingperiod > 365) {
-              CaptialGainType = "Long-Term";
-            } else {
-              CaptialGainType = "Short Term";
-            }
+        // ------------------CapitalGainType-------------
+        let CaptialGainType = "";
+        if (ListingStatus === "Listed") {
+          if (Holdingperiod > 365) {
+            CaptialGainType = "Long-Term";
           } else {
-            if (Holdingperiod > 1095) {
-              CaptialGainType = "Long-Term";
-            } else {
-              CaptialGainType = "Short Term";
-            }
+            CaptialGainType = "Short Term";
           }
-
-          const PurchaseUniqueCode =
-            EventType === "FI_PUR"
-              ? UniqueCode
-              : stockmaster1.find(
-                  (obj) =>
-                    obj.EventType === "FI_PUR" &&
-                    obj.ClientCode === ClientCode &&
-                    obj.SecurityCode === SecurityCode
-                )?.UniqueCode;
-
-          const SaleUniqueCode =
-            EventType === "FI_SAL"
-              ? UniqueCode
-              : stockmaster1.find(
-                  (obj) =>
-                    obj.EventType === "FI_SAL" &&
-                    obj.ClientCode === ClientCode &&
-                    obj.SecurityCode === SecurityCode
-                )?.UniqueCode;
-
-          const PurchaseSubSecCode = SucuritySubCode;
-
-          if (buy > sell) {
-            finalbuy = Math.min(sell, buy);
-            puchaseQty = buy - finalbuy;
-            // Quantity = finalbuy;
-            saleQty = 0;
-            if (puchaseQty > 0) {
-              buyquantity = [
-                ...buyquantity.slice(0, i + 1),
-                puchaseQty,
-                ...buyquantity.slice(i + 1),
-              ];
-            }
-          } else if (buy === sell) {
-            finalsell = Math.min(sell, buy);
-            puchaseQty = 0;
-            // Quantity = finalsell;
-            saleQty = 0;
-          } else if (buy < sell) {
-            finalsell = Math.min(sell, buy);
-            puchaseQty = 0;
-            // Quantity = finalsell;
-            saleQty = sell - finalsell;
-            if (saleQty > 0) {
-              sellquantity.push(saleQty);
-            }
+        } else {
+          if (Holdingperiod > 1095) {
+            CaptialGainType = "Long-Term";
+          } else {
+            CaptialGainType = "Short Term";
           }
-
-          const data = {
-            ClientCode,
-            ClientName,
-            SucuritySubCode,
-            SecurityName,
-            ISIN,
-            Quantity,
-            PurchaseDate,
-            SaleDate,
-            Purchaseprice,
-            Saleprice,
-            Holdingperiod,
-            PurchaseValue,
-            SaleValue,
-            ListingStatus,
-            CaptialGainType,
-            CaptialGainLoss,
-            PurchaseUniqueCode,
-            SaleUniqueCode,
-            PurchaseSubSecCode,
-            SecurityCode,
-            PurchaseQuantity: puchaseQty,
-            SaleQuantity: saleQty,
-          };
-
-          CGStmt.push(data);
-
-          i++;
         }
 
-        // console.log("Loop End");
-
-        //-------------------------------
-
-        const stockitem = stockmaster1[index];
-
-        let Sellbalance = 0;
-        if (stockitem.EventType === "FI_SAL") {
-          const sumquan = CGStmt.reduce((total, obj) => {
-            if (obj.SaleUniqueCode === stockitem.UniqueCode)
-              console.log(obj.SaleUniqueCode, obj.Quantity);
-            return obj.SaleUniqueCode === stockitem.UniqueCode
-              ? total + obj.Quantity
-              : total;
-          }, 0);
-
-          Sellbalance = stockitem.Quantity - sumquan;
-        }
-
-        stockmaster1[index].Sellbalance = Sellbalance > 0 ? Sellbalance : 0;
-
-        let Buybalance = 0;
-        if (stockitem.EventType === "FI_PUR") {
-          const sumquan = CGStmt.reduce((total, obj) => {
-            return obj.PurchaseUniqueCode === stockitem.UniqueCode
-              ? total + obj.Quantity
-              : total;
-          }, 0);
-
-          Buybalance = stockitem.Quantity - sumquan;
-        }
-
-        stockmaster1[index].Buybalance = Buybalance > 0 ? Buybalance : 0;
+        sellArray[index].Holdingperiod = Holdingperiod;
+        sellArray[index].Purchaseprice = Purchaseprice;
+        sellArray[index].PurchaseValue = PurchaseValue;
+        sellArray[index].SaleValue = SaleValue;
+        sellArray[index].CaptialGainLoss = CaptialGainLoss;
+        sellArray[index].ListingStatus = ListingStatus;
+        sellArray[index].CaptialGainType = CaptialGainType;
+        sellArray[index].ClientName = ListingStatusobj.SecurityDescription;
+        sellArray[index].ISIN = ListingStatusobj.ISIN;
+        sellArray[index].PurchaseDate = buyArray[index].PurchaseDate;
+        sellArray[index].PuchaseUniqueCode = buyArray[index].PuchaseUniqueCode;
+        sellArray[index].PuchaseSubSecCode = buyArray[index].PuchaseSubSecCode;
       });
 
-      // return res.json({
-      //   status: true,
-      //   stockmaster: CGStmt,
-      //   subsecinfo: CGStmt,
-      // });
-      return res.json({
-        status: true,
-        stockmaster: result,
-        subsecinfo: CGStmt,
-      });
+      // console.log(sellArray);
 
-      // console.log(CGStmt);
+      CGStmt.push(sellArray[0]);
 
-      res.json({ status: true, stockmaster: stockmaster1, subsecinfo: result });
-    } catch (error) {
-      console.log(error);
-      res.status(500).json({ status: false, message: error.message });
+      for (let index = 0; index < stockmaster1.length; index++) {
+        // const item = stockmaster1[index];
+        let { UniqueCode, Quantity, EventType } = stockmaster1[index];
+
+        const SellBalancearr = CGStmt.filter(
+          (item) => item?.SaleUniqueCode === UniqueCode
+        );
+
+        // console.log(SellBalancearr);
+        let SellBalance = 0;
+        if (EventType === "FI_SAL") {
+          let SellBalanceSum = 0;
+
+          SellBalanceSum = SellBalancearr.reduce((sum, item) => {
+            return item.Quantity ? sum + item.Quantity : sum;
+          }, 0);
+
+          SellBalance = Quantity - SellBalanceSum;
+        } else {
+          SellBalance = 0;
+        }
+
+        stockmaster1[index].SellBalance = SellBalance;
+
+        const BuyBalancearr = CGStmt.filter(
+          (item) => item?.PurchaseUniqueCode === UniqueCode
+        );
+
+        let BuyBalance = 0;
+        if (EventType === "FI_PUR") {
+          let BuyBalanceSum = BuyBalancearr.reduce((sum, item) => {
+            return item.Quantity ? sum + item.Quantity : sum;
+          }, 0);
+
+          BuyBalance = Quantity - BuyBalanceSum;
+        } else {
+          BuyBalance = 0;
+        }
+
+        stockmaster1[index].BuyBalance = BuyBalance;
+      }
+
+      const loopingsellBalancearr = stockmaster1.filter(
+        (obj) =>
+          new Date(OuterObj.SettlementDate).toISOString().split("T")[0] ===
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+          obj.EventType === "FI_SAL" &&
+          obj.ClientCode === OuterObj.ClientCode &&
+          obj.SecurityCode === OuterObj.SecurityCode
+      );
+
+      let loopingBalancesum = 0;
+      if (loopingsellBalancearr && loopingsellBalancearr.length > 0) {
+        loopingBalancesum = loopingsellBalancearr.reduce((total, item) => {
+          return item.SellBalance ? total + item.SellBalance : total;
+        }, 0);
+      }
+
+      OuterArr[cgmtindex].looping = loopingBalancesum;
+
+      if (loopingBalancesum === 0) {
+        cgmtindex++;
+      }
     }
 
+    return res.json({
+      status: true,
+      stockmaster: CGStmt,
+      subsecinfo: result,
+    });
+
+    // console.log(CGStmt);
+
+    res.json({ status: true, stockmaster: stockmaster1, subsecinfo: result });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ status: false, message: error.message });
   }
-);
+});
 
 app.post(
   "/upload",
@@ -1597,12 +1316,9 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
     })
   );
 
-  console.log("calculatedData: ", calculatedData);
+  // console.log("calculatedData: ", calculatedData);
 });
 
-// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
-//   const data = await utils.readExcelFile(req.file.buffer)
-// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
