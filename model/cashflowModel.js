@@ -10,16 +10,6 @@ const cashflowSchema = new mongoose.Schema(
     Total: Number,
     CouponRate: Number,
     DCB: Number,
-    // RDDays:Number,
-    // RDType:String,
-    // YTM:Number,
-    // StartDate:Number,
-    // DF:Number,
-    // PV:Number,//pv for valuation
-    // Weightage:Number,
-    // Tenor:Number,
-    // MacaulaysDuration:Number,
-    // RecordDate:Number
   },
   { timestamps: true, require: true }
 );

@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const subsecinfoSchema = new mongoose.Schema(
+const subsecinfolatestSchema = new mongoose.Schema(
   {
     SubSecCode: String,
     ValuationDate: Date,
@@ -39,6 +39,9 @@ const subsecinfoSchema = new mongoose.Schema(
   { timestamps: true, require: true }
 );
 
-const Subsecinfo = mongoose.model("subsecinfo", subsecinfoSchema);
+const Subsecinfolatest = mongoose.model(
+  "subsecinfolatest",
+  subsecinfolatestSchema
+);
 
-module.exports = Subsecinfo;
+module.exports = Subsecinfolatest;

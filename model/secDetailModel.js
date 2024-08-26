@@ -20,6 +20,7 @@ const secDetailSchema = new mongoose.Schema(
     Exchange: String,
     RDDays: Number,
     RDType: String,
+    ListingStatus: String,
   },
   { timestamps: true, require: true }
 );

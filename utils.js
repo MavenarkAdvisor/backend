@@ -28,61 +28,31 @@ exports.JSToExcelDate = (newdate) => {
   return Math.floor(date.getTime() / 86400 / 1000) + 25569;
 };
 
-exports.calculateStartDateForValue = async (
-  item,
-  index,
-  data,
-  settlement_date
-) => {
-  if (index === 0) {
-    return "";
-  }
-
-  const prevDate = data[index - 1]?.Date
-    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
-    : 1;
-  const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
-
-  const valueDate = new Date(settlement_date);
-  valueDate.setDate(valueDate.getDate() - 1);
-
-  if (item.Total < 0 || currentRowDate <= valueDate) {
-    return "";
-  } else {
-    return settlement_date > prevDate ? settlement_date : prevDate;
-  }
-};
-
-exports.calculateDFForValuation = async (
-  item,
-  index,
-  data,
-  settlement_date
-) => {
+exports.calculateDFForValuation = async (item, index, data, system_date) => {
   if (item.PrevCfDate == "") {
     return parseFloat(1).toFixed(16);
   }
 
   const prevDFForValuation = data[index - 1]?.DFForValuation
     ? data[index - 1].DFForValuation
-    : 1.00;
+    : 1.0;
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
   const YTM = parseFloat(item.YTM);
   const daysToPrevCF =
     (currentRowDate - item.StartDateForValue) / (1000 * 60 * 60 * 24); // Convert milliseconds to days
 
-  if (item.Total < 0 || settlement_date > currentRowDate) {
-    return 1.00;
+  if (item.Total < 0 || system_date > currentRowDate) {
+    return 1.0;
   } else {
     return prevDFForValuation / Math.pow(1 + YTM, daysToPrevCF / item.DCB);
   }
 };
 
-exports.calculatePVForValuation = async (item, settlement_date) => {
+exports.calculatePVForValuation = async (item, system_date) => {
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
 
-  const valueDate = new Date(settlement_date);
+  const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
   if (item.Total < 0 || valueDate > currentRowDate) {
@@ -92,10 +62,10 @@ exports.calculatePVForValuation = async (item, settlement_date) => {
   }
 };
 
-exports.calculatePV = async (item, settlement_date) => {
+exports.calculatePV = async (item, system_date) => {
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
 
-  const valueDate = new Date(settlement_date);
+  const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
   if (item.Total < 0 || valueDate > currentRowDate) {
@@ -105,12 +75,7 @@ exports.calculatePV = async (item, settlement_date) => {
   }
 };
 
-exports.calculateTenor = async (
-  item,
-  index,
-  calculatedData,
-  settlement_date
-) => {
+exports.calculateTenor = async (item, index, calculatedData, system_date) => {
   // Calculate Weightage for each item
 
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
@@ -118,7 +83,7 @@ exports.calculateTenor = async (
     ? new Date(calculatedData[index].StartDateForValue)
     : 1;
 
-  const valueDate = new Date(settlement_date);
+  const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
   const prevTenor = calculatedData[index - 1]?.Tenor
@@ -187,7 +152,7 @@ exports.calculateRecordDateModify = async (item) => {
   }
 };
 
-exports.calculateStartDate = async (item, index, data, settlement_date) => {
+exports.calculateStartDate = async (item, index, data, system_date) => {
   if (index === 0) {
     return "";
   }
@@ -197,56 +162,76 @@ exports.calculateStartDate = async (item, index, data, settlement_date) => {
     : 1;
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
 
-  const valueDate = new Date(settlement_date);
+  const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
-  if (item.Total < 0 || currentRowDate <= settlement_date) {
+  if (item.Total < 0 || currentRowDate <= system_date) {
     return "";
   } else {
-    return settlement_date > prevDate ? settlement_date : prevDate;
+    return system_date > prevDate ? system_date : prevDate;
   }
 };
 
-exports.calculatePVMOdify = async (item, index, data, settlement_date) => {
-  if (item.StartDate === "") {
+exports.calculateStartDateForValue = async (item, index, data, system_date) => {
+  if (index === 0) {
     return "";
   }
 
+  const prevDate = data[index - 1]?.Date
+    ? new Date((data[index - 1].Date - 25569) * 86400 * 1000)
+    : 1;
   const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
 
-  const valueDate = new Date(settlement_date);
+  const valueDate = new Date(system_date);
   valueDate.setDate(valueDate.getDate() - 1);
 
-  if (item.Total < 0 || settlement_date > currentRowDate) {
+  if (item.Total < 0 || currentRowDate <= valueDate) {
     return "";
   } else {
-    return parseFloat(item.Total) * parseFloat(item.DF);
+    return system_date > prevDate ? system_date : prevDate;
   }
-
-  // try {
-  //   let a;
-  //   if (item.StartDate === "") {
-  //     a = "";
-  //   } else {
-  //     a = item.Total * item.DF;
-  //   }
-
-  //   let result;
-  //   if (settlement_date > item.RecordDate) {
-  //     result = a - item.Total;
-  //   } else {
-  //     result = a;
-  //   }
-
-  //   return result;
-  // } catch (error) {
-  //   return "";
-  // }
 };
 
-// exports.CalculateIntAccPerDay = async () => {
+exports.calculatePVMOdify = async (item, index, data, system_date) => {
+  // if (item.StartDate === "") {
+  //   return "";
+  // }
 
-// };
+  // const currentRowDate = new Date((item.Date - 25569) * 86400 * 1000);
+
+  // const valueDate = new Date(system_date);
+  // valueDate.setDate(valueDate.getDate() - 1);
+
+  // if (item.Total < 0 || system_date > currentRowDate) {
+  //   return "";
+  // } else {
+  //   return parseFloat(item.Total) * parseFloat(item.DF);
+  // }
+
+  // const a = !item.StartDate ? "" : item.Total * item.DF;
+
+  // return a ? (system_date > item.RecordDate ? a - item.Total : a) : "";
+
+  try {
+    let a;
+    if (!item.StartDate) {
+      return "";
+    } else {
+      a = item.Total * item.DF;
+    }
+
+    let result;
+    if (system_date > item.RecordDate) {
+      result = a - item.Total;
+    } else {
+      result = a;
+    }
+
+    return result;
+  } catch (error) {
+    return "";
+  }
+};
 
 // ----------------------------------------------------------------
 
@@ -254,6 +239,32 @@ exports.YTMcalculate = async (item) => {
   const subSecCode = item.SubSecCode;
   const extractedValue = parseFloat(subSecCode.split("_")[1]).toFixed(2) + "%";
   return extractedValue;
+};
+
+const { xirr } = require("node-irr");
+
+const calculateIRR = (cashFlows) => {
+  try {
+    const result = xirr(cashFlows);
+    return result; // Return the result instead of logging it
+  } catch (error) {
+    console.error("Error calculating IRR:", error.message);
+    return null; // Return null in case of an error
+  }
+};
+
+exports.calculateYTM = async (item, index, data, currentDate) => {
+  const cashFlows = data
+    .filter((obj) => obj.SecurityCode === item.SecurityCode)
+    .map((obj) => {
+      return {
+        date: new Date((obj.Date - 25569) * 86400 * 1000),
+        amount: parseFloat(obj.Total),
+        days: obj.DCB,
+      };
+    });
+  // console.log(cashFlows);
+  return calculateIRR(cashFlows).rate * 1000;
 };
 
 exports.calculatePrevCFDate = async (item, index, data, currentDate) => {
@@ -333,7 +344,7 @@ exports.calculateWeightage = async (calculatedData) => {
     item.Weightage =
       item.PVForValuation === "" || sumPV === 0
         ? ""
-        : ((item.PVForValuation / sumPV) * 100) + "%";
+        : (item.PVForValuation / sumPV) * 100 + "%";
   });
 
   return calculatedData;
@@ -401,7 +412,7 @@ exports.faceValue = async (cashflowData, item) => {
 
 // Function to find the LIP Date using XLOOKUP logic
 exports.findLIPDate = async (cashflowData, item) => {
-  const lookupKey = item.SubSecCode + item.SettlementDate;
+  const lookupKey = item.SubSecCode + item.SystemDate;
 
   // Search for the lookupKey in cashflows array
   for (let i = 2; i >= 0; i--) {
@@ -421,7 +432,7 @@ exports.findLIPDate = async (cashflowData, item) => {
 // Function to find the NIP Date using XLOOKUP logic
 exports.findNIPDate = async (cashflowData, item) => {
   // Convert the date to a number and add 1 to it
-  const nextDate = item.SettlementDate ? item.SettlementDate + 1 : null;
+  const nextDate = item.SystemDate ? item.SystemDate + 1 : null;
 
   // If the date is not a number, return null
   if (nextDate === null) {
@@ -448,7 +459,7 @@ exports.findNIPDate = async (cashflowData, item) => {
 // Function to find the Record Date using XLOOKUP logic
 exports.findRecordDate = async (cashflowData, item) => {
   // Convert the date to a number and add 1 to it
-  const nextDate = item.SettlementDate ? item.SettlementDate + 1 : null;
+  const nextDate = item.SystemDate ? item.SystemDate + 1 : null;
 
   // If the date is not a number, return null
   if (nextDate === null) {
