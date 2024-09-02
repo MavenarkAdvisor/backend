@@ -55,6 +55,7 @@ exports.calculateresult = async (
           }
 
           // nip date - filter exact and next larger date [redempltion] from system_date [current]
+
           if (date > system_date && item.SubSecCode === subsecCode) {
             if (nipDate < system_date) {
               nipDate = date;
@@ -64,6 +65,7 @@ exports.calculateresult = async (
           }
 
           // recorddate - filter exact and next larger RecordDate [redempltion] from system_date [current]
+
           if (item.RecordDate) {
             const RecordDate = new Date(item.RecordDate);
             if (date > system_date && item.SubSecCode === subsecCode) {
@@ -117,6 +119,7 @@ exports.calculateresult = async (
           }
 
           // dcb - find dbc from redemption which have exact and next large date [redempltion] than settlement date [current]
+
           if (date >= system_date && item.SubSecCode === subsecCode) {
             if (dcbdate < system_date) {
               dcbdate = date;
@@ -128,7 +131,8 @@ exports.calculateresult = async (
           }
         }
 
-        // -----------------calculate Int Acc per day -------------------
+        // calculate Int Acc per day ---------------------------------
+
         const intaccperday_daysDiff =
           (system_date - lipdateforsettlement) / (1000 * 60 * 60 * 24);
 

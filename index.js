@@ -114,7 +114,7 @@ app.post("/securityupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    // console.log(data);
+    console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await secDetailModel.findOne(item);
@@ -141,7 +141,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    // console.log(data);
+    console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await transactionModel.findOne(item);
@@ -166,7 +166,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
 
 app.post("/subsecinfo", async (req, res) => {
   try {
-    // console.log(req.body);
+    console.log(req.body);
     let { system_date, from, to } = req.body;
     system_date = new Date(system_date);
     from = new Date(from);
@@ -680,7 +680,7 @@ app.post("/subsecinfo", async (req, res) => {
 
     // -------- Processing Stockmaster Data -----------------------------------------
 
-    const stockmaster1 = await Promise.all(
+    const stockmasterV2 = await Promise.all(
       stockmaster
         .filter(
           (item) => item.YTM && item.SettlementDate <= system_date
@@ -802,11 +802,11 @@ app.post("/subsecinfo", async (req, res) => {
 
     // return res.json({
     //   status: true,
-    //   stockmaster: stockmaster1,
-    //   subsecinfo: stockmaster1,
+    //   stockmaster: stockmasterV2,
+    //   subsecinfo: stockmasterV2,
     // });
 
-    // return res.json({ status: true, data: stockmaster1 });
+    // return res.json({ status: true, data: stockmasterV2 });
 
     await systemDateModel.findOneAndUpdate(
       {
@@ -820,15 +820,15 @@ app.post("/subsecinfo", async (req, res) => {
       { upsert: true, new: true }
     );
 
-    //-------------------- Calculating CGtmt Data  ------------------
+    //Calculating CGtmt Data  -----------------------------------
 
-    let CGStmt = [];
+    let stockmasterV3 = [];
 
-    for (let index = 0; index < stockmaster1.length; index++) {
-      // const item = stockmaster1[index];
-      let { UniqueCode, Quantity, EventType } = stockmaster1[index];
+    for (let index = 0; index < stockmasterV2.length; index++) {
+      // const item = stockmasterV2[index];
+      let { UniqueCode, Quantity, EventType } = stockmasterV2[index];
 
-      const SellBalancearr = CGStmt.filter(
+      const SellBalancearr = stockmasterV3.filter(
         (item) => item.SaleUniqueCode === UniqueCode
       );
 
@@ -843,9 +843,9 @@ app.post("/subsecinfo", async (req, res) => {
         SellBalance = 0;
       }
 
-      stockmaster1[index].SellBalance = SellBalance;
+      stockmasterV2[index].SellBalance = SellBalance;
 
-      const BuyBalancearr = CGStmt.filter(
+      const BuyBalancearr = stockmasterV3.filter(
         (item) => item.PurchaseUniqueCode === UniqueCode
       );
 
@@ -860,10 +860,16 @@ app.post("/subsecinfo", async (req, res) => {
         BuyBalance = 0;
       }
 
-      stockmaster1[index].BuyBalance = BuyBalance;
+      stockmasterV2[index].BuyBalance = BuyBalance;
     }
 
-    const OuterFilterArr = stockmaster1.filter(
+    // return res.json({
+    //   status: true,
+    //   stockmaster: stockmasterV2,
+    //   subsecinfo: stockmasterV2,
+    // });
+
+    const OuterFilterArr = stockmasterV2.filter(
       (item) =>
         new Date(item.SettlementDate).toISOString().split("T")[0] ===
           new Date(system_date).toISOString().split("T")[0] &&
@@ -873,7 +879,7 @@ app.post("/subsecinfo", async (req, res) => {
     // console.log(OuterFilterArr);
 
     const OuterArr = OuterFilterArr.map((item) => {
-      const sellBalancearr = stockmaster1.find(
+      const sellBalancearr = stockmasterV2.find(
         (obj) =>
           new Date(item.SettlementDate).toISOString().split("T")[0] ===
             new Date(obj.SettlementDate).toISOString().split("T")[0] &&
@@ -896,28 +902,43 @@ app.post("/subsecinfo", async (req, res) => {
       };
     });
 
+    // console.log(OuterArr);
+
     let cgmtindex = 0;
 
+    // return res.json({
+    //   status: true,
+    //   stockmaster: stockmasterV2,
+    //   subsecinfo: stockmasterV2,
+    // });
+
+    let loopindex = 0;
+    let sellArray;
+    let buyArray;
     while (cgmtindex < OuterArr.length) {
       const OuterObj = OuterArr[cgmtindex];
 
-      const ResultArr = stockmaster1.filter(
-        (item) =>
-          item.ClientCode === OuterObj.ClientCode &&
-          item.SecurityCode === OuterObj.SecurityCode
-      );
+      // const ResultArr = stockmasterV2.filter(
+      //   (item) =>
+      //     item.ClientCode === OuterObj.ClientCode &&
+      //     item.SecurityCode === OuterObj.SecurityCode
+      // );
 
       // console.log(ResultArr);
 
       // cgmtindex++;
 
-      const sellArray = ResultArr.flatMap((outerItem) =>
-        stockmaster1
+      if (cgmtindex === 2) {
+        console.log(OuterObj);
+      }
+
+      if (loopindex === 0) {
+        sellArray = stockmasterV2
           .filter(
             (stockItem) =>
-              stockItem.SettlementDate === outerItem.SettlementDate &&
-              stockItem.ClientCode === outerItem.ClientCode &&
-              stockItem.SecurityCode === outerItem.SecurityCode &&
+              stockItem.SettlementDate === OuterObj.SettlementDate &&
+              stockItem.ClientCode === OuterObj.ClientCode &&
+              stockItem.SecurityCode === OuterObj.SecurityCode &&
               stockItem.EventType === "FI_SAL" &&
               stockItem.SellBalance > 0
           )
@@ -929,139 +950,183 @@ app.post("/subsecinfo", async (req, res) => {
             SaleDate: stockItem.SettlementDate,
             SaleUniqueCode: stockItem.UniqueCode,
             Sell: stockItem.SellBalance, //storing lasted the SellBalance value
-          }))
-      );
+          }));
 
-      // console.log(sellArray);
+        // console.log(sellArray);
 
-      const buyArray = ResultArr.flatMap((outerItem) =>
-        stockmaster1
+        buyArray = stockmasterV2
           .filter(
             (stockItem) =>
               new Date(stockItem.SettlementDate) <=
-                new Date(outerItem.SettlementDate) &&
-              stockItem.ClientCode === outerItem.ClientCode &&
-              stockItem.SecurityCode === outerItem.SecurityCode &&
+                new Date(OuterObj.SettlementDate) &&
+              stockItem.ClientCode === OuterObj.ClientCode &&
+              stockItem.SecurityCode === OuterObj.SecurityCode &&
               stockItem.EventType === "FI_PUR" &&
               stockItem.BuyBalance > 0
           )
           .map((stockItem) => ({
+            ClientCode: stockItem.ClientCode,
             PurchaseDate: stockItem.SettlementDate,
             PuchaseUniqueCode: stockItem.UniqueCode,
             PuchaseSubSecCode: stockItem.SucuritySubCode,
             Buy: stockItem.BuyBalance, //storing lasted the SellBalance value
-          }))
-      );
+          }));
+      }
 
-      // console.log(buyArray);
+      if (cgmtindex === 2) {
+        // console.log(stockmasterV2);
+        console.log(buyArray);
+        console.log(sellArray);
+      }
 
-      sellArray.forEach(async (item, index) => {
-        let Quantity = 0;
-        let buy = buyArray[index].Buy;
-        let sell = item.Sell;
-        let saleQty = 0;
-        let puchaseQty = 0;
+      // sellArray.forEach(async (item, index) => {
 
-        if (buy > sell) {
-          Quantity = Math.min(sell, buy);
-          puchaseQty = buy - Quantity;
-          saleQty = 0;
-          // Quantity = finalbuy;
-        } else if (buy === sell) {
-          Quantity = Math.min(sell, buy);
-          puchaseQty = 0;
-          saleQty = 0;
-          // Quantity = finalsell;
-        } else if (buy < sell) {
-          Quantity = Math.min(sell, buy);
-          puchaseQty = 0;
-          saleQty = sell - Quantity;
-          // Quantity = finalsell;
-        }
+      // while()
 
-        sellArray[index].Quantity = Quantity;
-        sellArray[index].saleQty = saleQty;
-        sellArray[index].puchaseQty = puchaseQty;
+      let item = sellArray[loopindex];
 
-        const SaleDate = sellArray[index].SaleDate;
-        const PurchaseDate = buyArray[index].PurchaseDate;
-        const SecurityCode = sellArray[index].SecurityCode;
-        const SucuritySubCode = sellArray[index].SucuritySubCode;
-        const SalePrice = sellArray[index].SalePrice.toFixed(2);
+      let Quantity = 0;
+      let buy = buyArray[loopindex].Buy;
+      let sell = item.Sell;
+      let saleQty = 0;
+      let puchaseQty = 0;
 
-        // ----------- Holding Period -----------
-        const Holdingperiod =
-          SaleDate && PurchaseDate
-            ? (SaleDate - PurchaseDate) / (1000 * 60 * 60 * 24)
-            : 0;
+      if (buy > sell) {
+        Quantity = Math.min(sell, buy);
+        puchaseQty = buy - Quantity;
+        saleQty = 0;
 
-        // ----------- Purchase Price -----------
-        const Purchasepriceobj = result.find(
-          (obj) =>
-            obj.SubSecCode === SucuritySubCode &&
-            new Date(obj.SystemDate).toISOString().split("T")[0] ===
-              new Date(SaleDate).toISOString().split("T")[0]
-        );
-        const Purchaseprice = Purchasepriceobj
-          ? Purchasepriceobj.CleanPriceforSettlement
+        const newitem = { ...buyArray[loopindex], Buy: puchaseQty };
+        buyArray.push(newitem);
+
+        // Quantity = finalbuy;
+      } else if (buy === sell) {
+        Quantity = Math.min(sell, buy);
+        puchaseQty = 0;
+        saleQty = 0;
+        // Quantity = finalsell;
+      } else if (buy < sell) {
+        Quantity = Math.min(sell, buy);
+        puchaseQty = 0;
+        saleQty = sell - Quantity;
+        const newitem = { ...item, Sell: saleQty };
+        sellArray.push(newitem);
+        // Quantity = finalsell;
+      }
+
+      sellArray[loopindex].Quantity = Quantity;
+      sellArray[loopindex].saleQty = saleQty;
+      sellArray[loopindex].puchaseQty = puchaseQty;
+
+      const SaleDate = sellArray[loopindex].SaleDate;
+      const PurchaseDate = buyArray[loopindex].PurchaseDate;
+      const SecurityCode = sellArray[loopindex].SecurityCode;
+      const SucuritySubCode = sellArray[loopindex].SucuritySubCode;
+      const SalePrice = sellArray[loopindex].SalePrice.toFixed(2);
+
+      // ----------- Holding Period -----------
+      const Holdingperiod =
+        SaleDate && PurchaseDate
+          ? (SaleDate - PurchaseDate) / (1000 * 60 * 60 * 24)
           : 0;
 
-        // ---------------PurchaseValue----------
-        const PurchaseValue = Purchaseprice * Quantity;
-        // -----------------SaleValue------------
-        const SaleValue = SalePrice * Quantity;
-        // -----------------CapitalGainLoss--------------
-        const CaptialGainLoss = SaleValue - PurchaseValue;
-        // ---------------ListingStatus-----------
+      // ----------- Purchase Price -----------
+      const Purchasepriceobj = result.find(
+        (obj) =>
+          obj.SubSecCode === SucuritySubCode &&
+          new Date(obj.SystemDate).toISOString().split("T")[0] ===
+            new Date(SaleDate).toISOString().split("T")[0]
+      );
+      const Purchaseprice = Purchasepriceobj
+        ? Purchasepriceobj.CleanPriceforSettlement
+        : 0;
 
-        // console.log(SecurityCode);
-        const ListingStatusobj = data2.find(
-          (obj) => obj.SecurityCode === SecurityCode
-        );
+      // ---------------PurchaseValue----------
+      const PurchaseValue = Purchaseprice * Quantity;
+      // -----------------SaleValue------------
+      const SaleValue = SalePrice * Quantity;
+      // -----------------CapitalGainLoss--------------
+      const CaptialGainLoss = SaleValue - PurchaseValue;
+      // ---------------ListingStatus-----------
 
-        // console.log(ListingStatusobj);
+      // console.log(SecurityCode);
+      const ListingStatusobj = data2.find(
+        (obj) => obj.SecurityCode === SecurityCode
+      );
 
-        const ListingStatus = ListingStatusobj?.ListingStatus;
+      // console.log(ListingStatusobj);
 
-        // ------------------CapitalGainType-------------
-        let CaptialGainType = "";
-        if (ListingStatus === "Listed") {
-          if (Holdingperiod > 365) {
-            CaptialGainType = "Long-Term";
-          } else {
-            CaptialGainType = "Short Term";
-          }
+      const ListingStatus = ListingStatusobj?.ListingStatus;
+
+      // ------------------CapitalGainType-------------
+      let CaptialGainType = "";
+      if (ListingStatus === "Listed") {
+        if (Holdingperiod > 365) {
+          CaptialGainType = "Long-Term";
         } else {
-          if (Holdingperiod > 1095) {
-            CaptialGainType = "Long-Term";
-          } else {
-            CaptialGainType = "Short Term";
-          }
+          CaptialGainType = "Short Term";
         }
+      } else {
+        if (Holdingperiod > 1095) {
+          CaptialGainType = "Long-Term";
+        } else {
+          CaptialGainType = "Short Term";
+        }
+      }
 
-        sellArray[index].Holdingperiod = Holdingperiod;
-        sellArray[index].Purchaseprice = Purchaseprice;
-        sellArray[index].PurchaseValue = PurchaseValue;
-        sellArray[index].SaleValue = SaleValue;
-        sellArray[index].CaptialGainLoss = CaptialGainLoss;
-        sellArray[index].ListingStatus = ListingStatus;
-        sellArray[index].CaptialGainType = CaptialGainType;
-        sellArray[index].ClientName = ListingStatusobj.SecurityDescription;
-        sellArray[index].ISIN = ListingStatusobj.ISIN;
-        sellArray[index].PurchaseDate = buyArray[index].PurchaseDate;
-        sellArray[index].PuchaseUniqueCode = buyArray[index].PuchaseUniqueCode;
-        sellArray[index].PuchaseSubSecCode = buyArray[index].PuchaseSubSecCode;
-      });
+      sellArray[loopindex].Holdingperiod = Holdingperiod;
+      sellArray[loopindex].Purchaseprice = Purchaseprice;
+      sellArray[loopindex].PurchaseValue = PurchaseValue;
+      sellArray[loopindex].SaleValue = SaleValue;
+      sellArray[loopindex].CaptialGainLoss = CaptialGainLoss;
+      sellArray[loopindex].ListingStatus = ListingStatus;
+      sellArray[loopindex].CaptialGainType = CaptialGainType;
+      sellArray[loopindex].ClientName = ListingStatusobj.SecurityDescription;
+      sellArray[loopindex].ISIN = ListingStatusobj.ISIN;
+      sellArray[loopindex].PurchaseDate = buyArray[loopindex].PurchaseDate;
+      sellArray[loopindex].PuchaseUniqueCode =
+        buyArray[loopindex].PuchaseUniqueCode;
+      sellArray[loopindex].PuchaseSubSecCode =
+        buyArray[loopindex].PuchaseSubSecCode;
+
+      // ----------OriginalPurchasePrice----------
+
+      let OriginalPurchasePrice = 0;
+      const matchedItem = stockmasterV2.find(
+        (item) => item.UniqueCode === buyArray[loopindex].PuchaseUniqueCode
+      );
+      if (matchedItem) {
+        OriginalPurchasePrice = matchedItem.Rate;
+      }
+      sellArray[loopindex].OriginalPurchasePrice = OriginalPurchasePrice;
+
+      // -------------OriginalPurchaseValue-------------
+
+      const OriginalPurchaseValue = OriginalPurchasePrice * Quantity;
+
+      sellArray[loopindex].OriginalPurchaseValue = OriginalPurchaseValue;
+
+      // ------------PRD Holding Flag---------------
+
+      let PRDHoldingFlag = 0;
+      const matchedItem1 = stockmasterV2.find(
+        (item) => item.UniqueCode === sellArray[loopindex].SaleUniqueCode
+      );
+      if (matchedItem1) {
+        PRDHoldingFlag = matchedItem1.PRDHolding;
+      }
+
+      sellArray[loopindex].PRDHoldingFlag = PRDHoldingFlag;
 
       // console.log(sellArray);
 
-      CGStmt.push(sellArray[0]);
+      stockmasterV3.push(sellArray[loopindex]);
 
-      for (let index = 0; index < stockmaster1.length; index++) {
-        // const item = stockmaster1[index];
-        let { UniqueCode, Quantity, EventType } = stockmaster1[index];
+      for (let index = 0; index < stockmasterV2.length; index++) {
+        // const item = stockmasterV2[index];
+        let { UniqueCode, Quantity, EventType } = stockmasterV2[index];
 
-        const SellBalancearr = CGStmt.filter(
+        const SellBalancearr = stockmasterV3.filter(
           (item) => item?.SaleUniqueCode === UniqueCode
         );
 
@@ -1079,9 +1144,9 @@ app.post("/subsecinfo", async (req, res) => {
           SellBalance = 0;
         }
 
-        stockmaster1[index].SellBalance = SellBalance;
+        stockmasterV2[index].SellBalance = SellBalance;
 
-        const BuyBalancearr = CGStmt.filter(
+        const BuyBalancearr = stockmasterV3.filter(
           (item) => item?.PurchaseUniqueCode === UniqueCode
         );
 
@@ -1096,10 +1161,10 @@ app.post("/subsecinfo", async (req, res) => {
           BuyBalance = 0;
         }
 
-        stockmaster1[index].BuyBalance = BuyBalance;
+        stockmasterV2[index].BuyBalance = BuyBalance;
       }
 
-      const loopingsellBalancearr = stockmaster1.filter(
+      const loopingsellBalancearr = stockmasterV2.filter(
         (obj) =>
           new Date(OuterObj.SettlementDate).toISOString().split("T")[0] ===
             new Date(obj.SettlementDate).toISOString().split("T")[0] &&
@@ -1117,20 +1182,26 @@ app.post("/subsecinfo", async (req, res) => {
 
       OuterArr[cgmtindex].looping = loopingBalancesum;
 
-      if (loopingBalancesum === 0) {
+      if (
+        loopingBalancesum === 0 ||
+        !(sellArray.length > loopindex && buyArray.length > loopindex)
+      ) {
         cgmtindex++;
+        loopindex = 0;
+      } else {
+        loopindex++;
       }
     }
 
     return res.json({
       status: true,
-      stockmaster: CGStmt,
+      stockmaster: stockmasterV3,
       subsecinfo: result,
     });
 
-    // console.log(CGStmt);
+    // console.log(stockmasterV3);
 
-    res.json({ status: true, stockmaster: stockmaster1, subsecinfo: result });
+    res.json({ status: true, stockmaster: stockmasterV2, subsecinfo: result });
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: error.message });
@@ -1203,6 +1274,182 @@ app.post(
     });
   }
 );
+
+// app.post(
+//   "/upload",
+//   upload.fields([
+//     { name: "file1", maxCount: 1 },
+//     { name: "file2", maxCount: 1 },
+//   ]),
+//   async (req, res) => {
+//     let { system_date } = req.body;
+//     system_date = new Date(system_date);
+
+//     const file1 = req.files["file1"][0];
+//     const file2 = req.files["file2"][0];
+//     // const file3 = req.files["file3"][0];
+
+//     const workbook1 = xlsx.read(file1.buffer, { type: "buffer" });
+//     const sheet1 = workbook1.Sheets[workbook1.SheetNames[0]];
+//     const data1 = xlsx.utils.sheet_to_json(sheet1);
+
+//     const workbook2 = xlsx.read(file2.buffer, { type: "buffer" });
+//     const sheet2 = workbook2.Sheets[workbook2.SheetNames[0]];
+//     const data2 = xlsx.utils.sheet_to_json(sheet2);
+
+//     // const workbook3 = xlsx.read(file3.buffer, { type: "buffer" });
+//     // const sheet3 = workbook3.Sheets[workbook3.SheetNames[0]];
+//     // const stockmaster = xlsx.utils.sheet_to_json(sheet3);
+
+//     const data = utils.joinDataArrays(data1, data2, "SecurityCode");
+
+//     // Map over the data array and calculate the new field for each item
+//     const calculatedData = await Promise.all(
+//       data.map(async (item, index) => {
+//         const ytm_value = item.CouponRate;
+
+//         const subsecCode = item.SecurityCode + "_" + ytm_value;
+
+//         const prevCFDate = await utils.calculatePrevCFDate(
+//           item,
+//           index,
+//           data,
+//           system_date
+//         );
+
+//         const StartDateForValue = await utils.calculateStartDateForValue(
+//           item,
+//           index,
+//           data,
+//           system_date
+//         );
+
+//         return {
+//           ...item,
+//           YTM: ytm_value,
+//           PrevCfDate: prevCFDate,
+//           SubSecCode: subsecCode,
+//           StartDateForValue,
+//         };
+//       })
+//     );
+
+//     // Calculate DF
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const StartDate = await utils.calculateStartDate(
+//         item,
+//         index,
+//         data,
+//         system_date
+//       );
+//       calculatedData[index].StartDate = StartDate;
+
+//       const DF = await utils.calculateDF(item, index, calculatedData);
+//       calculatedData[index].DF = parseFloat(DF).toFixed(16);
+
+//       const DFForValuation = await utils.calculateDFForValuation(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].DFForValuation =
+//         parseFloat(DFForValuation).toFixed(16);
+
+//       const PVForValuation = await utils.calculatePVForValuation(
+//         item,
+//         system_date
+//       );
+//       calculatedData[index].PVForValuation = PVForValuation;
+
+//       // calculatedData[index].PV = PVForValuation;
+
+//       // const PV = !item.PrevCfDate || item.Total < 0 ? "" : item.Total * DF;
+//       // calculatedData[index].PV = PV;
+
+//       const PV = await utils.calculatePVMOdify(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].PV = PV;
+//     }
+
+//     await utils.calculateWeightage(calculatedData); // calculating weightage
+
+//     for (let index = 0; index < calculatedData.length; index++) {
+//       const item = calculatedData[index];
+
+//       const Tenor = await utils.calculateTenor(
+//         item,
+//         index,
+//         calculatedData,
+//         system_date
+//       );
+//       calculatedData[index].Tenor = Tenor;
+
+//       const MacaulayDuration = await utils.calculateMacaulayDuration(item);
+//       calculatedData[index].MacaulayDuration = MacaulayDuration;
+
+//       if (MacaulayDuration === "") {
+//         calculatedData[index].RDDays = "";
+//         calculatedData[index].RDType = "";
+//       }
+
+//       const recordDate = await utils.calculateRecordDateModify(item);
+//       calculatedData[index].RecordDate = recordDate;
+//     }
+
+//     const result = calculatedData.map((item, index) => {
+//       return {
+//         SubSecCode: item.SubSecCode,
+//         SecCode: item.SecurityCode,
+//         ISIN: item.ISIN,
+//         Date: item.Date,
+//         Interest: (item.Interest / 100).toFixed(2),
+//         Principal: (item.Principal / 100).toFixed(2),
+//         Total: (item.Total / 100).toFixed(2),
+//         DCB: item.DCB,
+//         YTM: item.YTM.toFixed(2),
+//         StartDateForValue: item.StartDateForValue,
+//         DFForValuation: item.DFForValuation,
+//         PVForValuation: item.PVForValuation,
+//         Weightage: item.Weightage,
+//         Tenor: item.Tenor.toFixed(2),
+//         MacaulayDuration:
+//           item.MacaulayDuration && item.MacaulayDuration.toFixed(9),
+//         RDDays: item.RDDays,
+//         RDType: item.RDType,
+//         RecordDate: item.RecordDate,
+//         StartDate: item.StartDate,
+//         DF: item.DF,
+//         PV: item.PV,
+//       };
+//     });
+
+//     const newWorkbook = xlsx.utils.book_new();
+//     const newWorksheet = xlsx.utils.json_to_sheet(result);
+//     xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
+
+//     // Save the new workbook
+//     const outputPath = path.join("uploads", `\output.xlsx`);
+//     xlsx.writeFile(newWorkbook, outputPath);
+
+//     // res.json({
+//     //   data: data.slice(0, 1),
+//     //   calculatedData: calculatedData.slice(0, 1),
+//     //   result,
+//     // });
+//     res.json({
+//       downloadUrl: `http://localhost:5000/download/${path.basename(
+//         outputPath
+//       )}`,
+//     });
+//   }
+// );
 
 app.get("/download/:filename", (req, res) => {
   const filename = req.params.filename;
@@ -1316,9 +1563,12 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
     })
   );
 
-  // console.log("calculatedData: ", calculatedData);
+  console.log("calculatedData: ", calculatedData);
 });
 
+// app.post('/capitalGain', upload.single('file'),async(req,res)=>{
+//   const data = await utils.readExcelFile(req.file.buffer)
+// })
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
