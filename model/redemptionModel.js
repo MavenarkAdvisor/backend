@@ -1,6 +1,6 @@
 const mongoose = require("mongoose");
 
-const redemptionSchema = new mongoose.Schema(
+const redemptionlatestSchema = new mongoose.Schema(
   {
     SubSecCode: String,
     SecCode: String,
@@ -27,6 +27,9 @@ const redemptionSchema = new mongoose.Schema(
   { timestamps: true, require: true }
 );
 
-const Redemptiom = mongoose.model("redemption", redemptionSchema);
+const Redemptiomlatest = mongoose.model(
+  "redemptionlatest",
+  redemptionlatestSchema
+);
 
-module.exports = Redemptiom;
+module.exports = Redemptiomlatest;
