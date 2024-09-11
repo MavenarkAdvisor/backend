@@ -9,7 +9,7 @@ const stockmasterV3Schema = new mongoose.Schema({
   SecuritySubCode: { type: String, required: true },
   SalePrice: { type: Number, required: true },
   SaleDate: { type: Date, required: true },
-  SaleUniqueCode: { type: String, required: true, },
+  SaleUniqueCode: { type: String, required: true },
   Sell: { type: Number, required: true },
   Quantity: { type: Number, required: true },
   saleQty: { type: Number, required: true },
@@ -19,7 +19,7 @@ const stockmasterV3Schema = new mongoose.Schema({
   PurchaseValue: { type: Number, required: true },
   SaleValue: { type: Number, required: true },
   CapitalGainLoss: { type: Number, required: true },
-  ListingStatus: { type: String },
+  ListingStatus: { type: String, },
   CapitalGainType: {
     type: String,
     required: true,
