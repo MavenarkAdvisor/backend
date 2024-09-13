@@ -100,8 +100,8 @@ exports.RequiredChangeYTM = async () => {
   return ChangeInYTM === "NA"
     ? "NA"
     : isNaN(ChangeInDiff) || ChangeInDiff === 0
-    ? 0
-    : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+      ? 0
+      : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
 };
 
 // ------------------------------------------------------------------------
