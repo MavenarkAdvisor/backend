@@ -123,7 +123,7 @@ app.post("/securityupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    console.log(data);
+    // console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await secDetailModel.findOne(item);
@@ -150,7 +150,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    console.log(data);
+    // console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await transactionModel.findOne(item);
@@ -175,7 +175,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
 
 app.post("/subsecinfo", async (req, res) => {
   try {
-    console.log(req.body);
+    // console.log(req.body);
     let { system_date, from, to } = req.body;
     system_date = new Date(system_date);
     from = new Date(from);
@@ -676,7 +676,18 @@ app.post("/subsecinfo", async (req, res) => {
     );
 
     const updateduniqueresult = uniqueresult.filter((obj) => obj);
-    await subsecinfoModel.insertMany(updateduniqueresult);
+
+    // console.log(updateduniqueresult);
+
+    for (let doc of updateduniqueresult) {
+      await subsecinfoModel.updateOne(
+        { SystemDate: doc?.SystemDate },
+        { $set: doc },
+        { upsert: true }
+      );
+    }
+
+    // await subsecinfoModel.insertMany(updateduniqueresult);
 
     //--------------------------------------------------------------------------
 
@@ -1246,8 +1257,6 @@ app.post("/subsecinfo", async (req, res) => {
     await stockmasterV2latestModel.deleteMany({});
     await stockmasterV2latestModel.insertMany(stockmasterV2);
 
-    console.log(stockmasterV2);
-
     return res.json({
       status: true,
       stockmaster: stockmasterV3,
@@ -1347,7 +1356,7 @@ app.post("/subposition", async (req, res) => {
           //-----------------CleanPrice_Today--------------
 
           let CleanPrice_Today = 0;
-          const matchedItem = PriceMaster.find(
+          const matchedItem = PriceMaster.filter(
             (item) =>
               item.SystemDate.toISOString().split("T")[0] ===
               system_date.toISOString().split("T")[0] &&
@@ -1392,7 +1401,7 @@ app.post("/subposition", async (req, res) => {
           //--------------CleanPrice_PreviousDay-------------------
 
           let CleanPrice_PreviousDay = 0;
-          const matchedItem1 = PriceMaster.find(
+          const matchedItem1 = PriceMaster.filter(
             (item) =>
               item.SystemDate.toISOString().split("T")[0] ===
               valueDate.toISOString().split("T")[0] &&
@@ -1440,7 +1449,7 @@ app.post("/subposition", async (req, res) => {
         })
     );
 
-    console.log(SubPosition);
+    // console.log(SubPosition);
 
     const duplicatessubposition = await Promise.all(
       SubPosition.map(async (data, i) => {
@@ -1485,7 +1494,7 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
   try {
     const marketpricesraw = await utils.readExcelFile(req.file.buffer);
 
-    // console.log(data);
+    // console.log(marketpricesraw);
 
     const ratingmaster = await ratingmasterModel.find({});
 
@@ -1493,10 +1502,13 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
       {},
       { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
     );
+    // console.log("Cashflowraw", Cashflowraw);
 
     const Cashflow = Cashflowraw.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
+
+    // console.log("Cashflow", Cashflow);
 
     const SecDetailraw = await secDetailModel.find(
       {},
@@ -1758,7 +1770,7 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
       // }
     }
 
-    console.log(marketprices);
+    // console.log(marketprices);
 
     const duplicatesmarketpricesresult = await Promise.all(
       marketprices.map(async (data, i) => {
@@ -1861,8 +1873,6 @@ app.post("/position", async (req, res) => {
       doc.toObject({ getters: true, virtuals: false })
     );
 
-    console.log(SubPosition);
-
     const position = await Promise.all(
       SubPosition.map(async (item) => {
         const { Date, ClientCode, SecurityCode } = item;
@@ -1941,12 +1951,13 @@ app.post("/position", async (req, res) => {
         }, 0);
         const CorpActionArr2 = StockMasterV3.reduce((total, curr) => {
           return curr.SaleDate <= Date &&
-            ClientCode === ClientCode &&
             curr.SecurityCode === SecurityCode &&
+            curr.ClientCode === ClientCode &&
             curr.PRDHoldingFlag === ""
             ? curr.Quantity + total
             : total;
         }, 0);
+
         const CorpActionQty = CorpActionArr1 - CorpActionArr2;
 
         // InterestAccruedPerUnitSinceLIPDate
@@ -1968,15 +1979,14 @@ app.post("/position", async (req, res) => {
 
         // InterestAccrualPerDayPerUnit
         let InterestAccrualPerDayPerUnit = 0;
-        const matchedItem2 = MarketPrice.find(
+        const matchedItem2 = PriceMaster.find(
           (item) =>
-            item.SettlementDate.toISOString().split("T")[0] ===
+            item.SystemDate.toISOString().split("T")[0] ===
             SystemDate.toISOString().split("T")[0] &&
             item.SecCode === SecurityCode
         );
         if (matchedItem2) {
-          InterestAccrualPerDayPerUnit =
-            matchedItem2.PrincipalRedemptionSinceLIP;
+          InterestAccrualPerDayPerUnit = matchedItem2.IntAccPerDay;
         }
 
         const InterestAccrualForDay = parseFloat(
@@ -1985,9 +1995,9 @@ app.post("/position", async (req, res) => {
 
         // PrincipalRedemptionPerUnitForDay
         let PrincipalRedemptionPerUnitForDay = 0;
-        const matchedItem4 = MarketPrice.find(
+        const matchedItem4 = PriceMaster.find(
           (item) =>
-            item.SettlementDate.toISOString().split("T")[0] ===
+            item.SystemDate.toISOString().split("T")[0] ===
             SystemDate.toISOString().split("T")[0] &&
             item.SecCode === SecurityCode
         );
@@ -2002,12 +2012,14 @@ app.post("/position", async (req, res) => {
 
         // MarketPricePerUnitOnToday
         let MarketPricePerUnitOnToday = 0;
+
         const matchedItem5 = MarketPrice.find(
           (item) =>
-            item.SystemDate.toISOString().split("T")[0] ===
-            SettlementDate.toISOString().split("T")[0] &&
+            item.Date.toISOString().split("T")[0] ===
+            SystemDate.toISOString().split("T")[0] &&
             item.SecurityCode === SecurityCode
         );
+
         if (matchedItem5) {
           MarketPricePerUnitOnToday = matchedItem5.CleanPrice;
         }
@@ -2032,18 +2044,20 @@ app.post("/position", async (req, res) => {
           CumulativeAmortisationTillPreviousDay,
           AmortisationForDay,
           CorpActionQty,
+          InterestAccruedPerUnitSinceLIPDate,
           InterestAccruedSinceLIPDate,
           InterestAccrualPerDayPerUnit,
           InterestAccrualForDay,
           PrincipalRedemptionPerUnitForDay,
           PrincipalRedemptionForDay,
+          MarketPricePerUnitOnToday,
           MarketValueOnToday,
           CumulativeUnrealisedGainLossUptoToDay,
         };
       })
     );
 
-    console.log(position);
+    // console.log(position);
 
     res.status(200).json({ status: true, position });
   } catch (error) {
@@ -2231,7 +2245,7 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
     })
   );
 
-  console.log("calculatedData: ", calculatedData);
+  // console.log("calculatedData: ", calculatedData);
 });
 
 // app.post('/capitalGain', upload.single('file'),async(req,res)=>{

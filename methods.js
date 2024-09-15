@@ -157,17 +157,17 @@ exports.calculateresult = async (
               ? intaccperday_a
               : intaccperday_x - intaccperday_y
             : item.CouponType === "C"
-              ? system_date === lipdateforsettlement
-                ? intaccperday_d
-                : intaccperday_b - intaccperday_c
-              : "NA";
+            ? system_date === lipdateforsettlement
+              ? intaccperday_d
+              : intaccperday_b - intaccperday_c
+            : "NA";
 
         //------------------------------------------------------
 
         // Calculating  DirtyPriceForSettlement by sum of all PV -----------------
         const DirtyPriceForSettlement = calculatedData.reduce((total, curr) => {
-          return curr.SubSecCode === subsecCode && curr.PV
-            ? curr.PV + total
+          return curr.SubSecCode === subsecCode && curr.PVForValuation
+            ? curr.PVForValuation + total
             : total;
         }, 0.0);
         //------------------------------------------------------

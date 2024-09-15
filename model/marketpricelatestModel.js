@@ -11,7 +11,7 @@ const marketpricelatestSchema = new mongoose.Schema({
   FaceValue: { type: Number, required: true },
   DirtyPrice: { type: Number, required: true },
   Interest: { type: Number, required: true },
-  CleanPrice: { type: mongoose.Decimal128, required: true },
+  CleanPrice: { type: Number, required: true },
   Rating: { type: String, required: true },
   RatingValue: { type: Number, required: true },
   YTM: { type: Number, required: true },

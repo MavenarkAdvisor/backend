@@ -51,6 +51,7 @@ const subpositionSchema = new mongoose.Schema({
   },
   AmortisationForDay: {
     type: Number,
+    default: 0,
     required: true,
   },
 });
