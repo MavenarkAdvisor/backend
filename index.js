@@ -123,7 +123,7 @@ app.post("/securityupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    // console.log(data);
+    console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await secDetailModel.findOne(item);
@@ -150,7 +150,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
-    // console.log(data);
+    console.log(data);
     const duplicates1 = await Promise.all(
       data.map(async (item, i) => {
         const res = await transactionModel.findOne(item);
@@ -321,7 +321,7 @@ app.post("/subsecinfo", async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+                    Math.pow(1 + InitialYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -357,7 +357,7 @@ app.post("/subsecinfo", async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+                    Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -391,8 +391,8 @@ app.post("/subsecinfo", async (req, res) => {
             ChangeInYTM === "NA"
               ? "NA"
               : isNaN(ChangeInDiff) || ChangeInDiff === 0
-                ? 0
-                : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+              ? 0
+              : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
 
           ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
 
@@ -677,11 +677,11 @@ app.post("/subsecinfo", async (req, res) => {
 
     const updateduniqueresult = uniqueresult.filter((obj) => obj);
 
-    // console.log(updateduniqueresult);
+    console.log(updateduniqueresult);
 
     for (let doc of updateduniqueresult) {
       await subsecinfoModel.updateOne(
-        { SystemDate: doc?.SystemDate },
+        { SystemDate: doc?.SystemDate, SecCode: doc.SecCode },
         { $set: doc },
         { upsert: true }
       );
@@ -729,7 +729,7 @@ app.post("/subsecinfo", async (req, res) => {
 
             if (
               item.SystemDate.toISOString().split("T")[0] ===
-              SettlementDate.toISOString().split("T")[0] &&
+                SettlementDate.toISOString().split("T")[0] &&
               item.SecCode === SecurityCode
             ) {
               FaceValuePerUnit = item.FaceValue;
@@ -760,7 +760,7 @@ app.post("/subsecinfo", async (req, res) => {
 
                 if (
                   item.SystemDate.toISOString().split("T")[0] ===
-                  SettlementDate.toISOString().split("T")[0] &&
+                    SettlementDate.toISOString().split("T")[0] &&
                   item.SecCode === SecurityCode
                 ) {
                   TransactionNRD = RecordDate;
@@ -778,7 +778,7 @@ app.post("/subsecinfo", async (req, res) => {
 
             if (
               item.SystemDate.toISOString().split("T")[0] ===
-              SettlementDate.toISOString().split("T")[0] &&
+                SettlementDate.toISOString().split("T")[0] &&
               item.SecCode === SecurityCode
             ) {
               NextDueDate = item.NIPDate;
@@ -891,7 +891,7 @@ app.post("/subsecinfo", async (req, res) => {
     const OuterFilterArr = stockmasterV2.filter(
       (item) =>
         new Date(item.SettlementDate).toISOString().split("T")[0] ===
-        new Date(system_date).toISOString().split("T")[0] &&
+          new Date(system_date).toISOString().split("T")[0] &&
         item.EventType === "FI_SAL"
     );
 
@@ -901,7 +901,7 @@ app.post("/subsecinfo", async (req, res) => {
       const sellBalancearr = stockmasterV2.find(
         (obj) =>
           new Date(item.SettlementDate).toISOString().split("T")[0] ===
-          new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
           obj.EventType === "FI_SAL" &&
           obj.ClientCode === item.ClientCode
       );
@@ -973,7 +973,7 @@ app.post("/subsecinfo", async (req, res) => {
           .filter(
             (stockItem) =>
               new Date(stockItem.SettlementDate) <=
-              new Date(OuterObj.SettlementDate) &&
+                new Date(OuterObj.SettlementDate) &&
               stockItem.ClientCode === OuterObj.ClientCode &&
               stockItem.SecurityCode === OuterObj.SecurityCode &&
               stockItem.EventType === "FI_PUR" &&
@@ -1044,7 +1044,7 @@ app.post("/subsecinfo", async (req, res) => {
         (obj) =>
           obj.SubSecCode === SecuritySubCode &&
           new Date(obj.SystemDate).toISOString().split("T")[0] ===
-          new Date(SaleDate).toISOString().split("T")[0]
+            new Date(SaleDate).toISOString().split("T")[0]
       );
       const Purchaseprice = Purchasepriceobj
         ? Purchasepriceobj.CleanPriceforSettlement
@@ -1176,7 +1176,7 @@ app.post("/subsecinfo", async (req, res) => {
       const loopingsellBalancearr = stockmasterV2.filter(
         (obj) =>
           new Date(OuterObj.SettlementDate).toISOString().split("T")[0] ===
-          new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
           obj.EventType === "FI_SAL" &&
           obj.ClientCode === OuterObj.ClientCode &&
           obj.SecurityCode === OuterObj.SecurityCode
@@ -1308,7 +1308,7 @@ app.post("/subposition", async (req, res) => {
           return (
             item.EventType === "FI_PUR" &&
             item.SettlementDate.toISOString().split("T")[0] <=
-            system_date.toISOString().split("T")[0]
+              system_date.toISOString().split("T")[0]
           );
         })
         .reduce(
@@ -1334,7 +1334,7 @@ app.post("/subposition", async (req, res) => {
             .filter(
               (item) =>
                 new Date(item.SettlementDate.toISOString().split("T")[0]) <=
-                new Date(system_date.toISOString().split("T")[0]) &&
+                  new Date(system_date.toISOString().split("T")[0]) &&
                 item.ClientCode === ClientCode &&
                 item.EventType === "FI_PUR" &&
                 item.SecuritySubCode === SecuritySubCode
@@ -1345,7 +1345,7 @@ app.post("/subposition", async (req, res) => {
             .filter(
               (item) =>
                 new Date(item.SaleDate.toISOString().split("T")[0]) <=
-                new Date(system_date.toISOString().split("T")[0]) &&
+                  new Date(system_date.toISOString().split("T")[0]) &&
                 item.ClientCode === ClientCode &&
                 item.PurchaseSubSecCode === SecuritySubCode
             )
@@ -1356,10 +1356,10 @@ app.post("/subposition", async (req, res) => {
           //-----------------CleanPrice_Today--------------
 
           let CleanPrice_Today = 0;
-          const matchedItem = PriceMaster.filter(
+          const matchedItem = PriceMaster.find(
             (item) =>
               item.SystemDate.toISOString().split("T")[0] ===
-              system_date.toISOString().split("T")[0] &&
+                system_date.toISOString().split("T")[0] &&
               item.SubSecCode === SecuritySubCode
           );
 
@@ -1376,7 +1376,7 @@ app.post("/subposition", async (req, res) => {
             .filter(
               (item) =>
                 new Date(item.SettlementDate.toISOString().split("T")[0]) <=
-                new Date(system_date.toISOString().split("T")[0]) &&
+                  new Date(system_date.toISOString().split("T")[0]) &&
                 item.ClientCode === ClientCode &&
                 item.EventType === "FI_PUR" &&
                 item.SecuritySubCode === SecuritySubCode
@@ -1387,7 +1387,7 @@ app.post("/subposition", async (req, res) => {
             .filter(
               (item) =>
                 new Date(item.SaleDate.toISOString().split("T")[0]) <=
-                new Date(system_date.toISOString().split("T")[0]) &&
+                  new Date(system_date.toISOString().split("T")[0]) &&
                 item.ClientCode === ClientCode &&
                 item.PurchaseSubSecCode === SecuritySubCode
             )
@@ -1401,10 +1401,10 @@ app.post("/subposition", async (req, res) => {
           //--------------CleanPrice_PreviousDay-------------------
 
           let CleanPrice_PreviousDay = 0;
-          const matchedItem1 = PriceMaster.filter(
+          const matchedItem1 = PriceMaster.find(
             (item) =>
               item.SystemDate.toISOString().split("T")[0] ===
-              valueDate.toISOString().split("T")[0] &&
+                valueDate.toISOString().split("T")[0] &&
               item.SubSecCode === SecuritySubCode
           );
           // console.log("matchedItem1", matchedItem1);
@@ -1449,7 +1449,7 @@ app.post("/subposition", async (req, res) => {
         })
     );
 
-    // console.log(SubPosition);
+    console.log(SubPosition);
 
     const duplicatessubposition = await Promise.all(
       SubPosition.map(async (data, i) => {
@@ -1649,7 +1649,7 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+                    Math.pow(1 + InitialYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -1685,7 +1685,7 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+                    Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -1719,8 +1719,8 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
             ChangeInYTM === "NA"
               ? "NA"
               : isNaN(ChangeInDiff) || ChangeInDiff === 0
-                ? 0
-                : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+              ? 0
+              : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
 
           ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
 
@@ -1965,7 +1965,7 @@ app.post("/position", async (req, res) => {
         const matchedItem3 = PriceMaster.find(
           (item) =>
             item.SystemDate.toISOString().split("T")[0] ===
-            SystemDate.toISOString().split("T")[0] &&
+              SystemDate.toISOString().split("T")[0] &&
             item.SecCode === SecurityCode
         );
         if (matchedItem3) {
@@ -1982,7 +1982,7 @@ app.post("/position", async (req, res) => {
         const matchedItem2 = PriceMaster.find(
           (item) =>
             item.SystemDate.toISOString().split("T")[0] ===
-            SystemDate.toISOString().split("T")[0] &&
+              SystemDate.toISOString().split("T")[0] &&
             item.SecCode === SecurityCode
         );
         if (matchedItem2) {
@@ -1998,7 +1998,7 @@ app.post("/position", async (req, res) => {
         const matchedItem4 = PriceMaster.find(
           (item) =>
             item.SystemDate.toISOString().split("T")[0] ===
-            SystemDate.toISOString().split("T")[0] &&
+              SystemDate.toISOString().split("T")[0] &&
             item.SecCode === SecurityCode
         );
         if (matchedItem4) {
@@ -2016,7 +2016,7 @@ app.post("/position", async (req, res) => {
         const matchedItem5 = MarketPrice.find(
           (item) =>
             item.Date.toISOString().split("T")[0] ===
-            SystemDate.toISOString().split("T")[0] &&
+              SystemDate.toISOString().split("T")[0] &&
             item.SecurityCode === SecurityCode
         );
 
@@ -2245,7 +2245,7 @@ app.post("/secInfo", upload.single("file"), async (req, res) => {
     })
   );
 
-  // console.log("calculatedData: ", calculatedData);
+  console.log("calculatedData: ", calculatedData);
 });
 
 // app.post('/capitalGain', upload.single('file'),async(req,res)=>{
