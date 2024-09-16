@@ -19,7 +19,7 @@ const stockmasterV3latestSchema = new mongoose.Schema({
   PurchaseValue: { type: Number, required: true },
   SaleValue: { type: Number, required: true },
   CapitalGainLoss: { type: Number, required: true },
-  ListingStatus: { type: String, required: true },
+  ListingStatus: { type: String, },
   CapitalGainType: {
     type: String,
     required: true,
