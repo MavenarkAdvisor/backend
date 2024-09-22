@@ -22,6 +22,8 @@ const stockmasterV2Model = require("./model/stockmasterV2Model");
 const stockmasterV2latestModel = require("./model/stockmasterV2latestModel");
 const subpositionModel = require("./model/subpositionModel");
 const subpositionlatestModel = require("./model/subpositionlatestModel");
+const positionModel = require("./model/positionModel");
+const positionlatestModel = require("./model/positionlatestModel");
 const ratingmasterModel = require("./model/ratingmasterModel");
 const { calculateresult } = require("./methods");
 const marketpriceModel = require("./model/marketpriceModel");
@@ -40,60 +42,200 @@ const upload = multer({ storage: storage });
 // Connect to MongoDB
 connectDB();
 
-app.post("/download", async (req, res) => {
+app.post("/api/download", async (req, res) => {
   try {
-    let { from, to } = req.body;
+    let { from, to, file } = req.body;
     from = new Date(from);
     to = new Date(to);
 
-    console.log(from, to);
+    let result;
 
-    const result = await subsecinfoModel.find(
-      {
-        SystemDate: {
-          $gte: from,
-          $lte: to,
-        },
-      },
-      {
-        _id: 0,
-        __v: 0,
-        createdAt: 0,
-        updatedAt: 0,
-      }
-    );
+    switch (file) {
+      case "cashflow":
+        from = utils.JSToExcelDate(from);
+        to = utils.JSToExcelDate(to);
+
+        result = await cashflowModel.find(
+          {
+            Date: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "secDetail":
+        from = utils.JSToExcelDate(from);
+        to = utils.JSToExcelDate(to);
+
+        result = await secDetailModel.find(
+          {},
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "redemption":
+        result = await redemptionModel.find(
+          {
+            Date: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "subsecinfo":
+        result = await subsecinfoModel.find(
+          {
+            SystemDate: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "transaction":
+        result = await transactionModel.find(
+          {
+            SettlementDate: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "stockmasterV3":
+        result = await stockmasterV3Model.find(
+          {},
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "stockmasterV2":
+        result = await stockmasterV2Model.find(
+          {
+            SettlementDate: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "subposition":
+        result = await subpositionModel.find(
+          {
+            Date: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "ratingmaster":
+        result = await ratingmasterModel.find(
+          {},
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      case "marketprice":
+        result = await marketpriceModel.find(
+          {
+            Date: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+
+      default:
+        return res
+          .status(400)
+          .json({ status: false, message: "Invalid file name" });
+    }
 
     const cleanResult = result.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
 
-    if (cleanResult && !cleanResult.length) {
-      return res.status(404).json({ status: false });
+    if (!cleanResult.length) {
+      return res.status(404).json({
+        status: false,
+        message: "No data found in the specified range",
+      });
     }
 
     res.json({ status: true, data: cleanResult });
   } catch (error) {
     res.status(500).json({ status: false, message: error.message });
   }
-
-  // const newWorkbook = xlsx.utils.book_new();
-  // const newWorksheet = xlsx.utils.json_to_sheet(cleanResult);
-  // xlsx.utils.book_append_sheet(newWorkbook, newWorksheet, "Sheet1");
-
-  // Save the new workbook
-  // const outputPath = path.join("uploads", "output.xlsx");
-  // xlsx.writeFile(newWorkbook, outputPath);
-
-  // res.download(outputPath, "output.xlsx", (err) => {
-  //   if (err) {
-  //     return res.status(500).json({ error: "Failed to download file" });
-  //   }
-  //   // Clean up the uploaded file and the generated Excel file after download
-  //   fs.unlink(outputPath, () => {});
-  // });
 });
 
-app.post("/cashflowupload", upload.single("file"), async (req, res) => {
+app.get("/api/systemdate", async (req, res) => {
+  try {
+    const result = await systemDateModel
+      .findOne(
+        {}, // no filter condition, fetch any document
+        {
+          _id: 0,
+          __v: 0,
+          createdAt: 0,
+          updatedAt: 0,
+        }
+      )
+      .sort({ SystemDate: -1 })
+      .limit(1);
+
+    res.json({ status: true, data: result });
+  } catch (error) {
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+app.post("/api/cashflowupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
@@ -119,7 +261,7 @@ app.post("/cashflowupload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/securityupload", upload.single("file"), async (req, res) => {
+app.post("/api/securityupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
@@ -146,7 +288,7 @@ app.post("/securityupload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
+app.post("/api/stockmasterupload", upload.single("file"), async (req, res) => {
   try {
     const data = await utils.readExcelFile(req.file.buffer);
 
@@ -173,7 +315,7 @@ app.post("/stockmasterupload", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/subsecinfo", async (req, res) => {
+app.post("/api/subsecinfo", async (req, res) => {
   try {
     // console.log(req.body);
     let { system_date, from, to } = req.body;
@@ -1257,10 +1399,13 @@ app.post("/subsecinfo", async (req, res) => {
     await stockmasterV2latestModel.deleteMany({});
     await stockmasterV2latestModel.insertMany(stockmasterV2);
 
+    // return res.json({
+    //   status: true,
+    //   stockmaster: stockmasterV3,
+    //   subsecinfo: result,
+    // });
     return res.json({
       status: true,
-      stockmaster: stockmasterV3,
-      subsecinfo: result,
     });
   } catch (error) {
     console.log(error);
@@ -1268,7 +1413,7 @@ app.post("/subsecinfo", async (req, res) => {
   }
 });
 
-app.post("/subposition", async (req, res) => {
+app.post("/api/subposition", async (req, res) => {
   try {
     let system_date = new Date(req.body.system_date);
 
@@ -1480,17 +1625,20 @@ app.post("/subposition", async (req, res) => {
     await subpositionlatestModel.deleteMany({});
     await subpositionlatestModel.insertMany(SubPosition);
 
-    return res.json({
-      status: true,
-      subposition: SubPosition,
-    });
+    res
+      .status(200)
+      .json({ status: true, message: "Sub-Position Calculated successfully" });
+    // return res.json({
+    //   status: true,
+    //   subposition: SubPosition,
+    // });
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: error.message });
   }
 });
 
-app.post("/marketprice", upload.single("file"), async (req, res) => {
+app.post("/api/marketprice", upload.single("file"), async (req, res) => {
   try {
     const marketpricesraw = await utils.readExcelFile(req.file.buffer);
 
@@ -1817,14 +1965,17 @@ app.post("/marketprice", upload.single("file"), async (req, res) => {
 
     // await secDetailModel.insertMany(uniquedocs1);
 
-    res.status(200).json({ status: true, marketprices });
+    res
+      .status(200)
+      .json({ status: true, message: "File uploaded successfully" });
+    // res.status(200).json({ status: true, marketprices });
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: error.message });
   }
 });
 
-app.post("/position", async (req, res) => {
+app.post("/api/position", async (req, res) => {
   try {
     const SystemDate = new Date(req.body.system_date);
 
@@ -2057,9 +2208,42 @@ app.post("/position", async (req, res) => {
       })
     );
 
+    console.log(position);
+
+    const duplicatesposition = await Promise.all(
+      position.map(async (data, i) => {
+        const res = await positionModel.findOne(data);
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniquepositionresult = await Promise.all(
+      position.map(async (data, i) => {
+        if (!duplicatesposition[i]) {
+          return data;
+        }
+      })
+    );
+
+    const updateduniqueposition = uniquepositionresult.filter((obj) => obj);
+
+    await positionModel.insertMany(updateduniqueposition);
+
+    // -- Storing StockmasterV2 latest Eod results --------------------------------
+
+    await positionlatestModel.deleteMany({});
+    await positionlatestModel.insertMany(position);
+
     // console.log(position);
 
-    res.status(200).json({ status: true, position });
+    // res.status(200).json({ status: true, position });
+
+    res
+      .status(200)
+      .json({ status: true, message: "Position Calculated successfully" });
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: error.message });
@@ -2067,7 +2251,7 @@ app.post("/position", async (req, res) => {
 });
 
 app.post(
-  "/upload",
+  "/api/upload",
   upload.fields([
     { name: "file1", maxCount: 1 },
     { name: "file2", maxCount: 1 },
@@ -2133,13 +2317,13 @@ app.post(
   }
 );
 
-app.get("/download/:filename", (req, res) => {
+app.get("/api/download/:filename", (req, res) => {
   const filename = req.params.filename;
   const filePath = path.join(__dirname, "uploads", filename);
   res.download(filePath);
 });
 
-app.post("/cashflow", upload.single("file"), async (req, res) => {
+app.post("/api/cashflow", upload.single("file"), async (req, res) => {
   try {
     const { system_date } = req.body;
     const data = await utils.readExcelFile(req.file.buffer);
@@ -2193,19 +2377,19 @@ app.post("/cashflow", upload.single("file"), async (req, res) => {
   }
 });
 
-app.post("/secDetail", upload.single("file"), async (req, res) => {
+app.post("/api/secDetail", upload.single("file"), async (req, res) => {
   const data = await utils.readExcelFile(req.file.buffer);
   await secDetailModel.insertMany(data);
   res.status(200).json({ message: "File uploaded successfully" });
 });
 
-app.post("/transaction", upload.single("file"), async (req, res) => {
+app.post("/api/transaction", upload.single("file"), async (req, res) => {
   const data = await utils.readExcelFile(req.file.buffer);
   await transactionModel.insertMany(data);
   res.status(200).json({ message: "File uploaded successfully" });
 });
 
-app.post("/secInfo", upload.single("file"), async (req, res) => {
+app.post("/api/secInfo", upload.single("file"), async (req, res) => {
   const data = await utils.readExcelFile(req.file.buffer);
   // console.log('data: ', data);
 
