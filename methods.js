@@ -157,10 +157,10 @@ exports.calculateresult = async (
               ? intaccperday_a
               : intaccperday_x - intaccperday_y
             : item.CouponType === "C"
-            ? system_date === lipdateforsettlement
-              ? intaccperday_d
-              : intaccperday_b - intaccperday_c
-            : "NA";
+              ? system_date === lipdateforsettlement
+                ? intaccperday_d
+                : intaccperday_b - intaccperday_c
+              : "NA";
 
         //------------------------------------------------------
 
