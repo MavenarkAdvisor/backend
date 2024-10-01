@@ -1578,11 +1578,9 @@ app.post("/api/subposition", async (req, res) => {
 
           let HoldingValue_PreviousDay;
 
-          if (CleanPrice_PreviousDay === "NA") {
-            HoldingValue_PreviousDay = "NA";
-          } else {
-            HoldingValue_PreviousDay = CleanPrice_PreviousDay * SubSecCodeQty;
-          }
+          HoldingValue_PreviousDay = (CleanPrice_PreviousDay === "NA")
+            ? 0.00
+            : CleanPrice_PreviousDay * SubSecCodeQty;
 
           //--------------CumulativeAmortisation_PreviousDay-------
 
