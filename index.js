@@ -1204,7 +1204,7 @@ app.post("/api/subsecinfo", async (req, res) => {
           new Date(SaleDate).toISOString().split("T")[0]
       );
       const Purchaseprice = Purchasepriceobj
-        ? Number(Purchasepriceobj.CleanPriceforSettlement).toFixed(2)
+        ? Number(Purchasepriceobj.CleanPriceforSettlement)
         : 0.00;
 
       // ---------------PurchaseValue----------
