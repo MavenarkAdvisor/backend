@@ -38,11 +38,11 @@ const subpositionSchema = new mongoose.Schema({
     required: true,
   },
   CleanPrice_PreviousDay: {
-    type: Number,
+    type: String,
     required: true,
   },
   HoldingValue_PreviousDay: {
-    type: Number,
+    type: String,
     required: true,
   },
   CumulativeAmortisation_PreviousDay: {
