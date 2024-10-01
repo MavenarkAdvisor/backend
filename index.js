@@ -1588,11 +1588,10 @@ app.post("/api/subposition", async (req, res) => {
 
           let CumulativeAmortisation_PreviousDay;
 
-          let validHoldingValue = HoldingValue_PreviousDay === "NA" ? 0.00 : HoldingValue_PreviousDay;
-
           try {
-            CumulativeAmortisation_PreviousDay =
-              validHoldingValue.toFixed(2) - HoldingCost.toFixed(2);
+            CumulativeAmortisation_PreviousDay = (HoldingValue_PreviousDay === "NA")
+              ? 0.00
+              : (parseFloat(validHoldingValue).toFixed(2) - parseFloat(HoldingCost).toFixed(2));
           } catch (error) {
             CumulativeAmortisation_PreviousDay = 0.00;
           }
