@@ -28,6 +28,10 @@ const ratingmasterModel = require("./model/ratingmasterModel");
 const { calculateresult } = require("./methods");
 const marketpriceModel = require("./model/marketpriceModel");
 const marketpricelatestModel = require("./model/marketpricelatestModel");
+const entrytypeModel = require("./model/entrytypeModel");
+const ledgercodeModel = require("./model/ledgercodeModel");
+const ledgerModel = require("./model/ledgerModel");
+const StockmasterV3 = require("./model/stockmasterV3Model");
 // const secInfoModel = require("./model/secInfoModel");
 
 // Enable CORS for all requests
@@ -168,6 +172,19 @@ app.post("/api/download", async (req, res) => {
         break;
       case "position":
         result = await positionModel.find(
+          {
+            Date: { $gte: from, $lte: to },
+          },
+          {
+            _id: 0,
+            __v: 0,
+            createdAt: 0,
+            updatedAt: 0,
+          }
+        );
+        break;
+      case "ledger":
+        result = await ledgerModel.find(
           {
             Date: { $gte: from, $lte: to },
           },
@@ -601,6 +618,8 @@ app.post("/api/subsecinfo", async (req, res) => {
       stockmaster[index].SecuritySubCode = SecuritySubCode;
     }
 
+    console.log("Stockmaster YTM calculated");
+
     //-----------------------------------------------------------------
 
     // return res.json({
@@ -766,6 +785,8 @@ app.post("/api/subsecinfo", async (req, res) => {
       };
     });
 
+    console.log("Redumption calculated");
+
     // return res.json({
     //   status: true,
     //   stockmaster: redemption,
@@ -843,6 +864,8 @@ app.post("/api/subsecinfo", async (req, res) => {
         { upsert: true }
       );
     }
+
+    console.log("Result/Subsecinfo data calculated");
 
     // await subsecinfoModel.insertMany(updateduniqueresult);
 
@@ -995,6 +1018,8 @@ app.post("/api/subsecinfo", async (req, res) => {
       },
       { upsert: true, new: true }
     );
+
+    console.log("stockmasterv2 data calculated");
 
     //Calculating CGtmt Data  -----------------------------------
 
@@ -1204,8 +1229,8 @@ app.post("/api/subsecinfo", async (req, res) => {
           new Date(SaleDate).toISOString().split("T")[0]
       );
       const Purchaseprice = Purchasepriceobj
-        ? Number(Purchasepriceobj.CleanPriceforSettlement)
-        : 0.00;
+        ? Purchasepriceobj.CleanPriceforSettlement
+        : 0;
 
       // ---------------PurchaseValue----------
       const PurchaseValue = Purchaseprice * Quantity;
@@ -1358,6 +1383,8 @@ app.post("/api/subsecinfo", async (req, res) => {
         loopindex++;
       }
     }
+
+    console.log("stockmasterv3 data calculated");
 
     const duplicatesstockV3result = await Promise.all(
       stockmasterV3.map(async (data, i) => {
@@ -1579,7 +1606,7 @@ app.post("/api/subposition", async (req, res) => {
           let HoldingValue_PreviousDay;
 
           HoldingValue_PreviousDay = (CleanPrice_PreviousDay === "NA")
-            ? 0.00
+            ? "NA"
             : CleanPrice_PreviousDay * SubSecCodeQty;
 
           //--------------CumulativeAmortisation_PreviousDay-------
@@ -1591,9 +1618,9 @@ app.post("/api/subposition", async (req, res) => {
             : (parseFloat(HoldingValue_PreviousDay).toFixed(2) - parseFloat(HoldingCost).toFixed(2));
 
           //--------------AmortisationForDay-----------------------
+
           const AmortisationForDay =
-            CumulativeAmortisation_Today.toFixed(2) -
-            CumulativeAmortisation_PreviousDay.toFixed(2);
+            CumulativeAmortisation_Today.toFixed(2) - CumulativeAmortisation_PreviousDay.toFixed(2);
 
           return {
             ClientCode,
@@ -2073,13 +2100,23 @@ app.post("/api/position", async (req, res) => {
 
         const CleanPrice = HoldingValueOnToday / Qty;
 
-        const HoldingValueOnPreviousDay = SubPosition.reduce((total, curr) => {
-          return curr.Date === Date &&
-            curr.ClientCode === ClientCode &&
-            curr.SecurityCode === SecurityCode
-            ? curr.HoldingValue_PreviousDay + total
-            : total;
-        }, "NA");
+        let HoldingValueOnPreviousDay = 0;
+
+        const DataValue = SubPosition.reduce((total, item) => {
+          if (
+            item.Date.toISOString().split("T")[0] === Date.toISOString().split("T")[0] &&
+            item.ClientCode === ClientCode &&
+            item.SecurityCode === SecurityCode
+          ) {
+            // If HoldingValue_PreviousDay is "NA", add 0, otherwise add its value
+            return item.HoldingValue_PreviousDay === "NA" ? total : item.HoldingValue_PreviousDay + total;
+          } else {
+            return total;
+          }
+        }, 0);
+
+        HoldingValueOnPreviousDay = DataValue;
+
 
         const CumulativeAmortisationTillToday = SubPosition.reduce(
           (total, curr) => {
@@ -2094,14 +2131,10 @@ app.post("/api/position", async (req, res) => {
 
         const CumulativeAmortisationTillPreviousDay = SubPosition.reduce(
           (total, curr) => {
-            const validAmortisation = curr.CumulativeAmortisation_PreviousDay === "NA"
-              ? 0.00
-              : curr.CumulativeAmortisation_PreviousDay;
-
             return curr.Date === Date &&
               curr.ClientCode === ClientCode &&
               curr.SecurityCode === SecurityCode
-              ? validAmortisation + total
+              ? curr.CumulativeAmortisation_PreviousDay + total
               : total;
           },
           0
@@ -2196,11 +2229,7 @@ app.post("/api/position", async (req, res) => {
 
         if (matchedItem5) {
           MarketPricePerUnitOnToday = matchedItem5.CleanPrice;
-          MarketPricePerUnitOnToday = (MarketPricePerUnitOnToday < 100)
-            ? MarketPricePerUnitOnToday.toFixed(2)
-            : MarketPricePerUnitOnToday.toFixed(4);
         }
-
 
         const MarketValueOnToday = parseFloat(
           MarketPricePerUnitOnToday * Qty
@@ -2271,6 +2300,240 @@ app.post("/api/position", async (req, res) => {
     res
       .status(200)
       .json({ status: true, message: "Position Calculated successfully" });
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
+app.post("/api/ledger", async (req, res) => {
+  try {
+    const StockMasterV2raw = await stockmasterV2latestModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const StockMasterV2 = StockMasterV2raw.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    const LedgerCoderaw = await ledgercodeModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const LedgerCode = LedgerCoderaw.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    const EntryTyperaw = await entrytypeModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+
+    const EntryType = EntryTyperaw.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    let Ledger = [];
+
+    StockMasterV2.forEach((item) => {
+      const {
+        EventType,
+        SettlementDate,
+        ClientCode,
+        SecurityCode,
+        FaceValue,
+        Amortisation,
+        InterestAccrued,
+        STT,
+        Brokerage,
+        TransactionCharges,
+        TurnoverFees,
+        ClearingCharges,
+        GST,
+        StampDuty,
+      } = item;
+
+      const Date = SettlementDate;
+
+      let ledgercodes;
+
+      if (SecurityCode) {
+        ledgercodes = LedgerCode.filter(
+          (ledger) => ledger.Type === "Both" || ledger.Type === "Sec Code"
+        );
+      } else {
+        ledgercodes = LedgerCode.filter(
+          (ledger) => ledger.Type === "No Sec Code"
+        );
+      }
+
+      const entrytypeobj = EntryType.find(
+        (item) => item.EntryType === EventType
+      );
+
+      const Narration = entrytypeobj?.DefaultNarration;
+
+      ledgercodes.forEach((ledger) => {
+        const { LedgerCode, LedgerName } = ledger;
+
+        let amount;
+
+        if (EventType === "FI_PUR") {
+          switch (LedgerCode) {
+            case "A1001":
+              amount = FaceValue;
+              break;
+            case "A1003":
+              amount = Amortisation;
+              break;
+            case "A1005":
+              amount = InterestAccrued;
+              break;
+            case "E1015":
+              amount = STT;
+              break;
+            case "E1010":
+              amount = Brokerage;
+              break;
+            case "E1011":
+              amount = TransactionCharges;
+              break;
+            case "E1012":
+              amount = TurnoverFees;
+              break;
+            case "E1013":
+              amount = ClearingCharges;
+              break;
+            case "E1014":
+              amount = GST;
+              break;
+            case "E1009":
+              amount = StampDuty;
+              break;
+            case "A1000":
+              const total = -(
+                (FaceValue ?? 0) +
+                (Amortisation ?? 0) +
+                (InterestAccrued ?? 0) +
+                (STT ?? 0) +
+                (Brokerage ?? 0) +
+                (TransactionCharges ?? 0) +
+                (TurnoverFees ?? 0) +
+                (ClearingCharges ?? 0) +
+                (GST ?? 0) +
+                (StampDuty ?? 0)
+              );
+
+              amount = total;
+              break;
+            default:
+              amount = null;
+          }
+        } else if (EventType === "FI_SAL") {
+          switch (LedgerCode) {
+            case "A1001":
+              amount = -FaceValue;
+              break;
+            case "A1003":
+              amount = -Amortisation;
+              break;
+            case "A1005":
+              amount = -InterestAccrued;
+              break;
+            case "E1015":
+              amount = -STT;
+              break;
+            case "E1010":
+              amount = -Brokerage;
+              break;
+            case "E1011":
+              amount = -TransactionCharges;
+              break;
+            case "E1012":
+              amount = -TurnoverFees;
+              break;
+            case "E1013":
+              amount = -ClearingCharges;
+              break;
+            case "E1014":
+              amount = -GST;
+              break;
+            case "E1009":
+              amount = -StampDuty;
+              break;
+            case "A1000":
+              const total =
+                (FaceValue ?? 0) +
+                (Amortisation ?? 0) +
+                (InterestAccrued ?? 0) +
+                (STT ?? 0) +
+                (Brokerage ?? 0) +
+                (TransactionCharges ?? 0) +
+                (TurnoverFees ?? 0) +
+                (ClearingCharges ?? 0) +
+                (GST ?? 0) +
+                (StampDuty ?? 0);
+              amount = total;
+              break;
+            default:
+              amount = null;
+          }
+        }
+
+        amount = utils.getValueOrEmpty(amount);
+
+        const CrDr = amount > 0 ? "D" : amount < 0 ? "C" : "";
+
+        if (amount !== null && amount !== undefined) {
+          Ledger.push({
+            EventType,
+            LedgerCode,
+            ClientCode,
+            Date,
+            SecurityCode,
+            Amount: amount,
+            LedgerName,
+            CrDr,
+            Narration,
+          });
+        }
+      });
+    });
+
+    // console.log(Ledger);
+
+    const duplicatesledger = await Promise.all(
+      Ledger.map(async (data, i) => {
+        const res = await ledgerModel.findOne({ Date: data.Date });
+        if (res) return true;
+        else {
+          return false;
+        }
+      })
+    );
+
+    const uniqueledgerresult = await Promise.all(
+      Ledger.map(async (data, i) => {
+        if (!duplicatesledger[i]) {
+          return data;
+        }
+      })
+    );
+
+    const updateduniqueledger = uniqueledgerresult.filter((obj) => obj);
+
+    await ledgerModel.insertMany(updateduniqueledger);
+
+    // -- Storing StockmasterV2 latest Eod results --------------------------------
+
+    // await positionlatestModel.deleteMany({});
+    // await positionlatestModel.insertMany(position);
+
+    res
+      .status(200)
+      .json({ status: true, message: "Ledger Calculated successfully" });
   } catch (error) {
     console.log(error);
     res.status(500).json({ status: false, message: error.message });

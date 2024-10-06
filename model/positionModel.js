@@ -30,8 +30,7 @@ const positionSchema = new mongoose.Schema({
     required: true,
   },
   HoldingValueOnPreviousDay: {
-    type: String,
-    required: true,
+    type: Number,
   },
   CumulativeAmortisationTillToday: {
     type: Number,

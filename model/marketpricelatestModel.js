@@ -13,7 +13,7 @@ const marketpricelatestSchema = new mongoose.Schema({
   Interest: { type: Number, required: true },
   CleanPrice: { type: Number, required: true },
   Rating: { type: String, required: true },
-  RatingValue: { type: Number, required: true },
+  RatingValue: { type: Number, },
   YTM: { type: Number, required: true },
 });
 

@@ -39,11 +39,9 @@ const subpositionlatestSchema = new mongoose.Schema({
   },
   CleanPrice_PreviousDay: {
     type: String,
-    required: true,
   },
   HoldingValue_PreviousDay: {
     type: String,
-    required: true,
   },
   CumulativeAmortisation_PreviousDay: {
     type: Number,
@@ -51,7 +49,6 @@ const subpositionlatestSchema = new mongoose.Schema({
   },
   AmortisationForDay: {
     type: Number,
-    required: true,
   },
 });
 
