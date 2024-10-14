@@ -21,6 +21,10 @@ const positionlatestSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  AverageCostPerUnit: {
+    type: Number,
+    required: true,
+  },
   HoldingValueOnToday: {
     type: Number,
     required: true,
