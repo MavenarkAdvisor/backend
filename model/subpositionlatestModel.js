@@ -33,15 +33,19 @@ const subpositionlatestSchema = new mongoose.Schema({
     type: Number,
     required: true,
   },
+  AverageCostPerUnit: {
+    type: Number,
+    required: true,
+  },
   CumulativeAmortisation_Today: {
     type: Number,
     required: true,
   },
   CleanPrice_PreviousDay: {
-    type: String,
+    type: Number,
   },
   HoldingValue_PreviousDay: {
-    type: String,
+    type: Number,
   },
   CumulativeAmortisation_PreviousDay: {
     type: Number,
