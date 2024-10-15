@@ -157,10 +157,10 @@ exports.calculateresult = async (
               ? intaccperday_a
               : intaccperday_x - intaccperday_y
             : item.CouponType === "C"
-              ? system_date === lipdateforsettlement
-                ? intaccperday_d
-                : intaccperday_b - intaccperday_c
-              : "NA";
+            ? system_date === lipdateforsettlement
+              ? intaccperday_d
+              : intaccperday_b - intaccperday_c
+            : "NA";
 
         //------------------------------------------------------
 
@@ -400,4 +400,221 @@ exports.calculateresult = async (
   );
 
   return result;
+};
+
+exports.calculateYTMStockmaster = async (stockmaster, data) => {
+  const BATCH_SIZE = 100; // Define batch size for chunk processing
+
+  // Helper function to process each batch of stockmaster
+  const processBatch = (batch) => {
+    for (let index = 0; index < batch.length; index++) {
+      const item = batch[index];
+
+      let {
+        ClientCode,
+        ClientName,
+        EventType,
+        TradeDate,
+        SettlementDate,
+        SecurityCode,
+        Quantity,
+        Rate,
+        InterestPerUnit,
+        StampDuty,
+      } = item;
+
+      TradeDate = utils.excelToJSDate(TradeDate);
+      batch[index].TradeDate = TradeDate;
+
+      SettlementDate = utils.excelToJSDate(SettlementDate);
+      batch[index].SettlementDate = SettlementDate;
+
+      let YTM = 0.0;
+
+      // Find the previous YTM if it exists
+      const prevYTMobj = stockmaster.find(
+        (obj) => SecurityCode === obj.SecurityCode && obj.YTM
+      );
+
+      if (prevYTMobj) {
+        YTM = prevYTMobj.YTM;
+      } else {
+        // Filter once per SecurityCode
+        let filterarray = data.filter(
+          (obj) =>
+            obj.SecurityCode === SecurityCode &&
+            utils.excelToJSDate(obj.Date) > SettlementDate
+        );
+
+        if (InterestPerUnit < 0) {
+          filterarray = filterarray.slice(1); // Skip first element if InterestPerUnit is negative
+        }
+
+        const maparray = filterarray.map((obj) => {
+          return {
+            Date: utils.excelToJSDate(obj.Date),
+            Total: obj.Total,
+            DCB: obj.DCB,
+          };
+        });
+
+        let ytmarray = [
+          {
+            Date: SettlementDate,
+            Total: (Rate + InterestPerUnit) * -1,
+            DF: 1.0,
+          },
+          ...maparray,
+        ];
+
+        let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
+        let defaultInitialYTM = 0.01;
+        let defaultYTMdifferential = 0.01;
+        let i = 0;
+
+        // Limit the loop to a maximum of 100 iterations to prevent infinite loops
+        const MAX_ITERATIONS = 100;
+
+        do {
+          const InitialYTM = defaultInitialYTM;
+          ytmvalues[i].InitialYTM = InitialYTM;
+          const YTMdifferential = defaultYTMdifferential;
+          ytmvalues[i].YTMdifferential = YTMdifferential;
+
+          // Calculate Present Value and Discount Factor for YTM
+          for (let j = 0; j < ytmarray.length; j++) {
+            const item = ytmarray[j];
+
+            if (j > 0) {
+              const dayDiff =
+                (ytmarray[j].Date - ytmarray[j - 1].Date) /
+                (1000 * 60 * 60 * 24);
+              ytmarray[j].DF =
+                item.DCB === ""
+                  ? 0
+                  : ytmarray[j - 1].DF /
+                    Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+            }
+
+            ytmarray[j].PV = ytmarray[j].Total * ytmarray[j].DF;
+          }
+
+          const OldDifference = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.PV,
+            0
+          );
+          ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(4));
+
+          const AdjustedYTMDifferential =
+            OldDifference < 0
+              ? ytmvalues[i].YTMdifferential * -1
+              : ytmvalues[i].YTMdifferential;
+          ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
+
+          ytmvalues[i].ModifiedYTM =
+            ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
+          const ModifiedYTM = ytmvalues[i].ModifiedYTM;
+
+          // Recalculate Present Value with Modified YTM
+          for (let j = 0; j < ytmarray.length; j++) {
+            const item = ytmarray[j];
+
+            if (j > 0) {
+              const dayDiff =
+                (ytmarray[j].Date - ytmarray[j - 1].Date) /
+                (1000 * 60 * 60 * 24);
+              ytmarray[j].DF =
+                item.DCB === ""
+                  ? 0
+                  : ytmarray[j - 1].DF /
+                    Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+            }
+
+            ytmarray[j].PV = ytmarray[j].Total * ytmarray[j].DF;
+          }
+
+          const NewDifference = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.PV,
+            0
+          );
+          ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(4));
+
+          const ChangeInYTM =
+            OldDifference > 0 === NewDifference > 0
+              ? ModifiedYTM - InitialYTM
+              : "NA";
+          ytmvalues[i].ChangeInYTM = ChangeInYTM;
+
+          const ChangeInDiff =
+            ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
+          ytmvalues[i].ChangeInDiff = ChangeInDiff;
+
+          const RequiredChangeInDiff =
+            ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
+          ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
+
+          const RequiredChangeYTM =
+            ChangeInYTM === "NA"
+              ? "NA"
+              : isNaN(ChangeInDiff) || ChangeInDiff === 0
+              ? 0
+              : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+          ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
+
+          const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
+          const EndYTMv2 =
+            RequiredChangeYTM === "NA"
+              ? InitialYTM
+              : InitialYTM + RequiredChangeYTM;
+          const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
+
+          ytmvalues[i].EndYTM = EndYTM;
+          defaultInitialYTM = EndYTM;
+
+          const SumOfTotal = ytmarray.reduce(
+            (accumulator, currentobj) => accumulator + currentobj.Total,
+            0
+          );
+
+          if (ChangeInDiff === "NA") {
+            defaultYTMdifferential = YTMdifferential / 2;
+          } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
+            defaultYTMdifferential = YTMdifferential;
+          } else if (Math.abs(ChangeInDiff) < 0.1) {
+            defaultYTMdifferential = YTMdifferential;
+          } else {
+            defaultYTMdifferential = YTMdifferential / 10;
+          }
+
+          ytmvalues.push({ InitialYTM: EndYTM });
+
+          i++;
+        } while (
+          (ytmvalues[i - 1].OldDifference > 0 ||
+            ytmvalues[i - 1].NewDifference > 0 ||
+            ytmvalues[i - 1].OldDifference < 0 ||
+            ytmvalues[i - 1].NewDifference < 0) &&
+          i < MAX_ITERATIONS
+        );
+
+        if (ytmvalues[i - 1].OldDifference <= 0) {
+          YTM = ytmvalues[i - 1].InitialYTM;
+        } else if (ytmvalues[i - 1].NewDifference <= 0) {
+          YTM = ytmvalues[i - 1].ModifiedYTM;
+        }
+      }
+
+      batch[index].YTM = YTM;
+      const SecuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
+      batch[index].SecuritySubCode = SecuritySubCode;
+    }
+  };
+
+  // Process stockmaster in chunks to prevent memory overload
+  for (let i = 0; i < stockmaster.length; i += BATCH_SIZE) {
+    const batch = stockmaster.slice(i, i + BATCH_SIZE);
+    processBatch(batch);
+  }
+
+  return stockmaster;
 };

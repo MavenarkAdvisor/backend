@@ -25,14 +25,12 @@ const subpositionlatestModel = require("./model/subpositionlatestModel");
 const positionModel = require("./model/positionModel");
 const positionlatestModel = require("./model/positionlatestModel");
 const ratingmasterModel = require("./model/ratingmasterModel");
-const { calculateresult } = require("./methods");
+const { calculateresult, calculateYTMStockmaster } = require("./methods");
 const marketpriceModel = require("./model/marketpriceModel");
 const marketpricelatestModel = require("./model/marketpricelatestModel");
 const entrytypeModel = require("./model/entrytypeModel");
 const ledgercodeModel = require("./model/ledgercodeModel");
 const ledgerModel = require("./model/ledgerModel");
-const StockmasterV3 = require("./model/stockmasterV3Model");
-// const secInfoModel = require("./model/secInfoModel");
 
 // Enable CORS for all requests
 app.use(cors());
@@ -403,7 +401,7 @@ app.post("/api/subsecinfo", async (req, res) => {
       { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
     );
 
-    const stockmaster = data31.map((doc) =>
+    let stockmaster = data31.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
 
@@ -412,211 +410,7 @@ app.post("/api/subsecinfo", async (req, res) => {
     console.log("System Date", system_date);
 
     // ------------ Calculating Ytm Stockmaster  --------------------
-    for (let index = 0; index < stockmaster.length; index++) {
-      const item = stockmaster[index];
-
-      let {
-        ClientCode,
-        ClientName,
-        EventType,
-        TradeDate,
-        SettlementDate,
-        SecurityCode,
-        Quantity,
-        Rate,
-        InterestPerUnit,
-        StampDuty,
-      } = item;
-
-      TradeDate = utils.excelToJSDate(TradeDate);
-      stockmaster[index].TradeDate = TradeDate;
-
-      SettlementDate = utils.excelToJSDate(SettlementDate);
-      stockmaster[index].SettlementDate = SettlementDate;
-
-      let YTM = 0.0;
-
-      // if (new Date(system_date) >= new Date(SettlementDate)) {
-      const prevYTMobj = stockmaster.find(
-        (obj) => SecurityCode === obj.SecurityCode && obj.YTM
-      );
-
-      if (prevYTMobj) {
-        YTM = prevYTMobj.YTM;
-      } else {
-        let filterarray = data.filter(
-          (obj) =>
-            obj.SecurityCode === SecurityCode &&
-            utils.excelToJSDate(obj.Date) > SettlementDate
-        );
-        if (InterestPerUnit < 0) {
-          filterarray = filterarray.slice(1);
-        }
-
-        const maparray = filterarray.map((obj) => {
-          return {
-            Date: utils.excelToJSDate(obj.Date),
-            Total: obj.Total,
-            DCB: obj.DCB,
-          };
-        });
-
-        let ytmarray = [
-          {
-            Date: SettlementDate,
-            Total: (Rate + InterestPerUnit) * -1,
-            DF: 1.0,
-          },
-          ...maparray,
-        ];
-
-        let ytmvalues = [{ InitialYTM: 0.01, YTMdifferential: 0.01 }];
-
-        let defaultInitialYTM = 0.01;
-        let defaultYTMdifferential = 0.01;
-        let i = 0;
-        do {
-          const InitialYTM = defaultInitialYTM;
-
-          ytmvalues[i].InitialYTM = InitialYTM;
-
-          const YTMdifferential = defaultYTMdifferential;
-
-          ytmvalues[i].YTMdifferential = YTMdifferential;
-
-          for (let index = 0; index < ytmarray.length; index++) {
-            const item = ytmarray[index];
-
-            if (index > 0) {
-              const dayDiff =
-                (ytmarray[index].Date - ytmarray[index - 1].Date) /
-                (1000 * 60 * 60 * 24);
-              ytmarray[index].DF =
-                item.DCB === ""
-                  ? 0
-                  : ytmarray[index - 1].DF /
-                  Math.pow(1 + InitialYTM, dayDiff / item.DCB);
-            }
-
-            ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
-          }
-
-          const OldDifference = ytmarray.reduce(
-            (accumulator, currentobj) => accumulator + currentobj.PV,
-            0
-          );
-
-          ytmvalues[i].OldDifference = parseFloat(OldDifference.toFixed(4));
-
-          const AdjustedYTMDifferential =
-            OldDifference < 0
-              ? ytmvalues[i].YTMdifferential * -1
-              : ytmvalues[i].YTMdifferential;
-          ytmvalues[i].AdjustedYTMDifferential = AdjustedYTMDifferential;
-
-          ytmvalues[i].ModifiedYTM =
-            ytmvalues[i].InitialYTM + ytmvalues[i].AdjustedYTMDifferential;
-
-          const ModifiedYTM = ytmvalues[i].ModifiedYTM;
-
-          for (let index = 0; index < ytmarray.length; index++) {
-            const item = ytmarray[index];
-
-            if (index > 0) {
-              const dayDiff =
-                (ytmarray[index].Date - ytmarray[index - 1].Date) /
-                (1000 * 60 * 60 * 24);
-
-              ytmarray[index].DF =
-                item.DCB === ""
-                  ? 0
-                  : ytmarray[index - 1].DF /
-                  Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
-            }
-
-            ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
-          }
-
-          const NewDifference = ytmarray.reduce(
-            (accumulator, currentobj) => accumulator + currentobj.PV,
-            0
-          );
-
-          ytmvalues[i].NewDifference = parseFloat(NewDifference.toFixed(4));
-
-          const ChangeInYTM =
-            OldDifference > 0 === NewDifference > 0
-              ? ModifiedYTM - InitialYTM
-              : "NA";
-
-          ytmvalues[i].ChangeInYTM = ChangeInYTM;
-
-          const ChangeInDiff =
-            ChangeInYTM === "NA" ? "NA" : NewDifference - OldDifference;
-
-          ytmvalues[i].ChangeInDiff = ChangeInDiff;
-
-          const RequiredChangeInDiff =
-            ChangeInYTM === "NA" ? "NA" : OldDifference * -1;
-
-          ytmvalues[i].RequiredChangeInDiff = RequiredChangeInDiff;
-
-          const RequiredChangeYTM =
-            ChangeInYTM === "NA"
-              ? "NA"
-              : isNaN(ChangeInDiff) || ChangeInDiff === 0
-                ? 0
-                : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
-
-          ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
-
-          const EndYTMv1 = ChangeInDiff === 0 ? ModifiedYTM : InitialYTM;
-          const EndYTMv2 =
-            RequiredChangeYTM === "NA"
-              ? InitialYTM
-              : InitialYTM + RequiredChangeYTM;
-          const EndYTM = Math.max(EndYTMv1, EndYTMv2, -99.9999);
-
-          ytmvalues[i].EndYTM = EndYTM;
-
-          defaultInitialYTM = EndYTM;
-
-          const SumOfTotal = ytmarray.reduce(
-            (accumulator, currentobj) => accumulator + currentobj.Total,
-            0
-          );
-          if (ChangeInDiff === "NA") {
-            defaultYTMdifferential = YTMdifferential / 2;
-          } else if (Math.abs(RequiredChangeInDiff / SumOfTotal) > 1) {
-            defaultYTMdifferential = YTMdifferential;
-          } else if (Math.abs(ChangeInDiff) < 0.1) {
-            defaultYTMdifferential = YTMdifferential;
-          } else {
-            defaultYTMdifferential = YTMdifferential / 10;
-          }
-
-          ytmvalues.push({ InitialYTM: EndYTM });
-
-          i++;
-        } while (
-          ytmvalues[i - 1].OldDifference > 0 ||
-          ytmvalues[i - 1].NewDifference > 0 ||
-          ytmvalues[i - 1].OldDifference < 0 ||
-          ytmvalues[i - 1].NewDifference < 0
-        );
-
-        if (ytmvalues[i - 1].OldDifference <= 0) {
-          YTM = ytmvalues[i - 1].InitialYTM;
-        } else if (ytmvalues[i - 1].NewDifference <= 0) {
-          YTM = ytmvalues[i - 1].ModifiedYTM;
-        }
-      }
-      // }
-      stockmaster[index].YTM = YTM;
-
-      const SecuritySubCode = SecurityCode + "_" + (YTM * 100).toFixed(2);
-      stockmaster[index].SecuritySubCode = SecuritySubCode;
-    }
+    stockmaster = await calculateYTMStockmaster(stockmaster, data);
 
     console.log("Stockmaster YTM calculated");
 
@@ -909,7 +703,7 @@ app.post("/api/subsecinfo", async (req, res) => {
 
             if (
               item.SystemDate.toISOString().split("T")[0] ===
-              SettlementDate.toISOString().split("T")[0] &&
+                SettlementDate.toISOString().split("T")[0] &&
               item.SecCode === SecurityCode
             ) {
               FaceValuePerUnit = item.FaceValue;
@@ -940,7 +734,7 @@ app.post("/api/subsecinfo", async (req, res) => {
 
                 if (
                   item.SystemDate.toISOString().split("T")[0] ===
-                  SettlementDate.toISOString().split("T")[0] &&
+                    SettlementDate.toISOString().split("T")[0] &&
                   item.SecCode === SecurityCode
                 ) {
                   TransactionNRD = RecordDate;
@@ -958,7 +752,7 @@ app.post("/api/subsecinfo", async (req, res) => {
 
             if (
               item.SystemDate.toISOString().split("T")[0] ===
-              SettlementDate.toISOString().split("T")[0] &&
+                SettlementDate.toISOString().split("T")[0] &&
               item.SecCode === SecurityCode
             ) {
               NextDueDate = item.NIPDate;
@@ -1073,7 +867,7 @@ app.post("/api/subsecinfo", async (req, res) => {
     const OuterFilterArr = stockmasterV2.filter(
       (item) =>
         new Date(item.SettlementDate).toISOString().split("T")[0] ===
-        new Date(system_date).toISOString().split("T")[0] &&
+          new Date(system_date).toISOString().split("T")[0] &&
         item.EventType === "FI_SAL"
     );
 
@@ -1083,7 +877,7 @@ app.post("/api/subsecinfo", async (req, res) => {
       const sellBalancearr = stockmasterV2.find(
         (obj) =>
           new Date(item.SettlementDate).toISOString().split("T")[0] ===
-          new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
           obj.EventType === "FI_SAL" &&
           obj.ClientCode === item.ClientCode
       );
@@ -1155,7 +949,7 @@ app.post("/api/subsecinfo", async (req, res) => {
           .filter(
             (stockItem) =>
               new Date(stockItem.SettlementDate) <=
-              new Date(OuterObj.SettlementDate) &&
+                new Date(OuterObj.SettlementDate) &&
               stockItem.ClientCode === OuterObj.ClientCode &&
               stockItem.SecurityCode === OuterObj.SecurityCode &&
               stockItem.EventType === "FI_PUR" &&
@@ -1226,10 +1020,10 @@ app.post("/api/subsecinfo", async (req, res) => {
         (obj) =>
           obj.SubSecCode === SecuritySubCode &&
           new Date(obj.SystemDate).toISOString().split("T")[0] ===
-          new Date(SaleDate).toISOString().split("T")[0]
+            new Date(SaleDate).toISOString().split("T")[0]
       );
       const Purchaseprice = Purchasepriceobj
-        ? Number(Purchasepriceobj.CleanPriceforSettlement).toFixed(2)
+        ? Purchasepriceobj.CleanPriceforSettlement
         : 0;
 
       // ---------------PurchaseValue----------
@@ -1358,7 +1152,7 @@ app.post("/api/subsecinfo", async (req, res) => {
       const loopingsellBalancearr = stockmasterV2.filter(
         (obj) =>
           new Date(OuterObj.SettlementDate).toISOString().split("T")[0] ===
-          new Date(obj.SettlementDate).toISOString().split("T")[0] &&
+            new Date(obj.SettlementDate).toISOString().split("T")[0] &&
           obj.EventType === "FI_SAL" &&
           obj.ClientCode === OuterObj.ClientCode &&
           obj.SecurityCode === OuterObj.SecurityCode
@@ -1839,7 +1633,7 @@ app.post("/api/marketprice", upload.single("file"), async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + InitialYTM, dayDiff / item.DCB);
+                    Math.pow(1 + InitialYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -1875,7 +1669,7 @@ app.post("/api/marketprice", upload.single("file"), async (req, res) => {
                 item.DCB === ""
                   ? 0
                   : ytmarray[index - 1].DF /
-                  Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
+                    Math.pow(1 + ModifiedYTM, dayDiff / item.DCB);
             }
 
             ytmarray[index].PV = ytmarray[index].Total * ytmarray[index].DF;
@@ -1909,8 +1703,8 @@ app.post("/api/marketprice", upload.single("file"), async (req, res) => {
             ChangeInYTM === "NA"
               ? "NA"
               : isNaN(ChangeInDiff) || ChangeInDiff === 0
-                ? 0
-                : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
+              ? 0
+              : (ChangeInYTM * RequiredChangeInDiff) / ChangeInDiff;
 
           ytmvalues[i].RequiredChangeYTM = RequiredChangeYTM;
 
@@ -2254,7 +2048,7 @@ app.post("/api/position", async (req, res) => {
       })
     );
 
-    console.log(position);
+    // console.log(position);
 
     const duplicatesposition = await Promise.all(
       position.map(async (data, i) => {
@@ -2298,12 +2092,20 @@ app.post("/api/position", async (req, res) => {
 
 app.post("/api/ledger", async (req, res) => {
   try {
+    // Fetch the required data
     const StockMasterV2raw = await stockmasterV2latestModel.find(
       {},
       { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
     );
-
     const StockMasterV2 = StockMasterV2raw.map((doc) =>
+      doc.toObject({ getters: true, virtuals: false })
+    );
+
+    const StockMasterV3raw = await stockmasterV3latestModel.find(
+      {},
+      { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+    );
+    const StockMasterV3 = StockMasterV3raw.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
 
@@ -2311,7 +2113,6 @@ app.post("/api/ledger", async (req, res) => {
       {},
       { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
     );
-
     const LedgerCode = LedgerCoderaw.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
@@ -2320,14 +2121,14 @@ app.post("/api/ledger", async (req, res) => {
       {},
       { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
     );
-
     const EntryType = EntryTyperaw.map((doc) =>
       doc.toObject({ getters: true, virtuals: false })
     );
 
     let Ledger = [];
 
-    StockMasterV2.forEach((item) => {
+    // Processing StockMasterV2
+    StockMasterV2.forEach((itemV2) => {
       const {
         EventType,
         SettlementDate,
@@ -2343,35 +2144,51 @@ app.post("/api/ledger", async (req, res) => {
         ClearingCharges,
         GST,
         StampDuty,
-      } = item;
+      } = itemV2;
+
+      // Calculate CapitalGainLoss from StockMasterV3
+      const CapitalGainLoss =
+        StockMasterV3.find(
+          (itemV3) =>
+            itemV2.SecurityCode === itemV3.SecurityCode &&
+            itemV2.ClientCode === itemV3.ClientCode
+        )?.CapitalGainLoss || 0;
+
+      // Calculate AmortisationData
+      const AmortisationData = StockMasterV3.filter(
+        (itemV3) =>
+          itemV2.SecurityCode === itemV3.SecurityCode &&
+          itemV2.ClientCode === itemV3.ClientCode
+      ).reduce((acc, itemV3) => acc + (itemV3.PurchaseValue || 0), 0);
 
       const Date = SettlementDate;
 
-      let ledgercodes;
+      // Get the correct EntryType
+      const entryTypeObj = EntryType.find((et) => et.EntryType === EventType);
+      const Narration = entryTypeObj?.DefaultNarration;
 
-      if (SecurityCode) {
-        ledgercodes = LedgerCode.filter(
-          (ledger) => ledger.Type === "Both" || ledger.Type === "Sec Code"
-        );
-      } else {
-        ledgercodes = LedgerCode.filter(
-          (ledger) => ledger.Type === "No Sec Code"
-        );
-      }
-
-      const entrytypeobj = EntryType.find(
-        (item) => item.EntryType === EventType
-      );
-
-      const Narration = entrytypeobj?.DefaultNarration;
-
-      ledgercodes.forEach((ledger) => {
-        const { LedgerCode, LedgerName } = ledger;
-
+      // Iterate over LedgerCode
+      LedgerCode.forEach((itemLedger) => {
+        const { LedgerCode, LedgerName } = itemLedger;
         let amount;
 
+        // Calculate amount based on the EventType and LedgerCode
         if (EventType === "FI_PUR") {
           switch (LedgerCode) {
+            case "A1000":
+              amount = -(
+                (FaceValue ?? 0) +
+                (Amortisation ?? 0) +
+                (InterestAccrued ?? 0) +
+                (StampDuty ?? 0) +
+                (Brokerage ?? 0) +
+                (TransactionCharges ?? 0) +
+                (TurnoverFees ?? 0) +
+                (ClearingCharges ?? 0) +
+                (GST ?? 0) +
+                (STT ?? 0)
+              );
+              break;
             case "A1001":
               amount = FaceValue;
               break;
@@ -2381,8 +2198,8 @@ app.post("/api/ledger", async (req, res) => {
             case "A1005":
               amount = InterestAccrued;
               break;
-            case "E1015":
-              amount = STT;
+            case "A1009":
+              amount = StampDuty;
               break;
             case "E1010":
               amount = Brokerage;
@@ -2399,41 +2216,38 @@ app.post("/api/ledger", async (req, res) => {
             case "E1014":
               amount = GST;
               break;
-            case "E1009":
-              amount = StampDuty;
-              break;
-            case "A1000":
-              const total = -(
-                (FaceValue ?? 0) +
-                (Amortisation ?? 0) +
-                (InterestAccrued ?? 0) +
-                (STT ?? 0) +
-                (Brokerage ?? 0) +
-                (TransactionCharges ?? 0) +
-                (TurnoverFees ?? 0) +
-                (ClearingCharges ?? 0) +
-                (GST ?? 0) +
-                (StampDuty ?? 0)
-              );
-
-              amount = total;
+            case "E1015":
+              amount = STT;
               break;
             default:
               amount = null;
           }
         } else if (EventType === "FI_SAL") {
           switch (LedgerCode) {
+            case "A1000":
+              amount =
+                (FaceValue ?? 0) +
+                (Amortisation ?? 0) +
+                (InterestAccrued ?? 0) +
+                (StampDuty ?? 0) +
+                (Brokerage ?? 0) +
+                (TransactionCharges ?? 0) +
+                (TurnoverFees ?? 0) +
+                (ClearingCharges ?? 0) +
+                (GST ?? 0) +
+                (STT ?? 0);
+              break;
             case "A1001":
               amount = -FaceValue;
               break;
             case "A1003":
-              amount = -Amortisation;
+              amount = -AmortisationData;
               break;
             case "A1005":
               amount = -InterestAccrued;
               break;
-            case "E1015":
-              amount = -STT;
+            case "E1009":
+              amount = -StampDuty;
               break;
             case "E1010":
               amount = -Brokerage;
@@ -2450,31 +2264,20 @@ app.post("/api/ledger", async (req, res) => {
             case "E1014":
               amount = -GST;
               break;
-            case "E1009":
-              amount = -StampDuty;
+            case "E1015":
+              amount = -STT;
               break;
-            case "A1000":
-              const total =
-                (FaceValue ?? 0) +
-                (Amortisation ?? 0) +
-                (InterestAccrued ?? 0) +
-                (STT ?? 0) +
-                (Brokerage ?? 0) +
-                (TransactionCharges ?? 0) +
-                (TurnoverFees ?? 0) +
-                (ClearingCharges ?? 0) +
-                (GST ?? 0) +
-                (StampDuty ?? 0);
-              amount = total;
+            case "I1007":
+              amount = -CapitalGainLoss;
               break;
             default:
               amount = null;
           }
         }
 
-        amount = utils.getValueOrEmpty(amount);
-
         const CrDr = amount > 0 ? "D" : amount < 0 ? "C" : "";
+
+        amount = utils.getValueOrEmpty(amount);
 
         if (amount !== null && amount !== undefined) {
           Ledger.push({
@@ -2491,7 +2294,6 @@ app.post("/api/ledger", async (req, res) => {
         }
       });
     });
-
     // console.log(Ledger);
 
     const duplicatesledger = await Promise.all(
@@ -2516,16 +2318,11 @@ app.post("/api/ledger", async (req, res) => {
 
     await ledgerModel.insertMany(updateduniqueledger);
 
-    // -- Storing StockmasterV2 latest Eod results --------------------------------
-
-    // await positionlatestModel.deleteMany({});
-    // await positionlatestModel.insertMany(position);
-
     res
       .status(200)
       .json({ status: true, message: "Ledger Calculated successfully" });
   } catch (error) {
-    console.log(error);
+    console.error(error);
     res.status(500).json({ status: false, message: error.message });
   }
 });
@@ -2709,7 +2506,7 @@ app.post("/api/secInfo", upload.single("file"), async (req, res) => {
     })
   );
 
-  console.log("calculatedData: ", calculatedData);
+  // console.log("calculatedData: ", calculatedData);
 });
 
 // app.post('/capitalGain', upload.single('file'),async(req,res)=>{
