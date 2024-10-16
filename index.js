@@ -1109,7 +1109,27 @@ app.post("/api/subsecinfo", async (req, res) => {
 
       for (let index = 0; index < stockmasterV2.length; index++) {
         // const item = stockmasterV2[index];
-        let { UniqueCode, Quantity, EventType } = stockmasterV2[index];
+        let {
+          ClientCode,
+          SecurityCode,
+          Quantity,
+          EventType,
+          FaceValue,
+          UniqueCode,
+        } = stockmasterV2[index];
+
+        if (EventType === "FI_SAL") {
+          const totalPurchaseValue = stockmasterV3
+            .filter(
+              (itemV3) =>
+                SecurityCode === itemV3.SecurityCode &&
+                ClientCode === itemV3.ClientCode
+            )
+            .reduce((acc, itemV3) => acc + (itemV3.PurchaseValue || 0), 0); // Sum of PurchaseValue
+
+          const recalculatedAmortisation = FaceValue - totalPurchaseValue;
+          stockmasterV2[index].Amortisation = recalculatedAmortisation;
+        }
 
         const SellBalancearr = stockmasterV3.filter(
           (item) => item?.SaleUniqueCode === UniqueCode
@@ -2154,13 +2174,6 @@ app.post("/api/ledger", async (req, res) => {
             itemV2.ClientCode === itemV3.ClientCode
         )?.CapitalGainLoss || 0;
 
-      // Calculate AmortisationData
-      const AmortisationData = StockMasterV3.filter(
-        (itemV3) =>
-          itemV2.SecurityCode === itemV3.SecurityCode &&
-          itemV2.ClientCode === itemV3.ClientCode
-      ).reduce((acc, itemV3) => acc + (itemV3.PurchaseValue || 0), 0);
-
       const Date = SettlementDate;
 
       // Get the correct EntryType
@@ -2241,7 +2254,7 @@ app.post("/api/ledger", async (req, res) => {
               amount = -FaceValue;
               break;
             case "A1003":
-              amount = -AmortisationData;
+              amount = -Amortisation;
               break;
             case "A1005":
               amount = -InterestAccrued;
