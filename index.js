@@ -31,6 +31,7 @@ const marketpricelatestModel = require("./model/marketpricelatestModel");
 const entrytypeModel = require("./model/entrytypeModel");
 const ledgercodeModel = require("./model/ledgercodeModel");
 const ledgerModel = require("./model/ledgerModel");
+const trialBalModel = require("./model/trialBalModel");
 
 // Enable CORS for all requests
 app.use(cors());
@@ -2362,6 +2363,93 @@ app.post("/api/ledger", async (req, res) => {
     res.status(500).json({ status: false, message: error.message });
   }
 });
+
+app.post("/api/trialBal", async (req, res) => {
+  try {
+    // Fetch the required data
+
+    const ledger = await ledgerModel
+      .find(
+        {},
+
+        { _id: 0, createdAt: 0, updatedAt: 0, __v: 0 }
+      )
+      .lean();
+
+    // Processing Ledger data
+
+    ledger.forEach((itemV2) => {
+      const { LedgerCode, ClientCode, Date, LedgerName } = itemV2;
+
+      const amt1 = ledger
+
+        .filter(
+          (item) =>
+            item.ClientCode === ClientCode &&
+            item.LedgerCode === LedgerCode &&
+            item.Date === Date
+        )
+
+        .reduce((sum, item) => sum + item.Amount, 0);
+
+      const amt2 = ledger
+
+        .filter(
+          (item) =>
+            item.ClientCode === ClientCode &&
+            item.LedgerCode === LedgerCode &&
+            new Date(item.Date) <= new Date(Date)
+        )
+
+        .reduce((sum, item) => sum + item.Amount, 0);
+
+      const Amount =
+        LedgerCode.startsWith("E") || LedgerCode.startsWith("I") ? amt1 : amt2;
+
+      return {
+        LedgerCode,
+
+        ClientCode,
+
+        Date,
+
+        LedgerName,
+
+        Amount,
+      };
+    });
+
+    // Check for duplicate records in trialBalModel by Date
+
+    const existingDates = await trialBalModel
+      .find(
+        { Date: { $in: trialBal.map((data) => data.Date) } },
+
+        { Date: 1 }
+      )
+      .lean();
+
+    // Find duplicate entries
+
+    const uniqueTrialBal = trialBal.filter(
+      (data) => !existingDates.some((existing) => existing.Date === data.Date)
+    );
+
+    // Insert unique entries into the database
+
+    if (uniqueTrialBal.length > 0) {
+      await trialBalModel.insertMany(uniqueTrialBal);
+    }
+    res
+      .status(200)
+      .json({ status: true, message: "Trial Balance Calculated successfully" });
+  } catch (error) {
+    console.error(error);
+
+    res.status(500).json({ status: false, message: error.message });
+  }
+});
+
 
 app.post(
   "/api/upload",
