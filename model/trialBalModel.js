@@ -19,4 +19,4 @@ const trialBalSchema = new mongoose.Schema({
     },
 });
 
-module.exports = mongoose.model("trialBal", trialBalSchema);
+module.exports = mongoose.model("trialbalance", trialBalSchema);
