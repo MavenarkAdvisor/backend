@@ -26,6 +26,8 @@ const stockmasterV2latestSchema = new mongoose.Schema({
   UniqueCode: { type: String, required: true },
   SellBalance: { type: Number, required: true },
   BuyBalance: { type: Number, required: true },
+  CapitalGainLoss: { type: Number, }
+
 });
 
 const StockmasterV2latest = mongoose.model("StockmasterV2latest", stockmasterV2latestSchema);
