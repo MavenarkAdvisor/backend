@@ -195,7 +195,6 @@ app.post("/api/download", async (req, res) => {
           }
         );
         break;
-
       case "trialbalance":
         result = await trialbalanceModel.find(
           {
@@ -778,6 +777,8 @@ app.post("/api/subsecinfo", async (req, res) => {
 
           const UniqueCode = `${ClientCode}_${EventType}_${SecurityCode}_${index}`;
 
+          let CapitalGainLoss = 0;
+
           return {
             ClientCode,
             ClientName,
@@ -802,6 +803,7 @@ app.post("/api/subsecinfo", async (req, res) => {
             NextDueDate,
             PRDHolding,
             UniqueCode,
+            CapitalGainLoss
           };
         })
     );
@@ -1146,23 +1148,21 @@ app.post("/api/subsecinfo", async (req, res) => {
           stockmasterV2[index].Amortisation = recalculatedAmortisation;
         }
 
-        const SellBalancearr = stockmasterV3.filter(
-          (item) => item?.SaleUniqueCode === UniqueCode
-        );
-
         if (EventType === "FI_SAL") {
           const totalCapitalGainLoss = stockmasterV3
             .filter(
-              (itemV3) =>
-                SecurityCode === itemV3.SecurityCode &&
-                ClientCode === itemV3.ClientCode
+              (itemV4) =>
+                SecurityCode === itemV4.SecurityCode &&
+                ClientCode === itemV4.ClientCode
             )
-            .reduce((acc, itemV3) => acc + (itemV3.CapitalGainLoss || 0),
-              0
-            );
+            .reduce((acc, itemV4) => acc + (itemV4.CapitalGainLoss || 0), 0); // Sum of CapitalGainLoss
 
           stockmasterV2[index].CapitalGainLoss = totalCapitalGainLoss;
         }
+
+        const SellBalancearr = stockmasterV3.filter(
+          (item) => item?.SaleUniqueCode === UniqueCode
+        );
 
         // console.log(SellBalancearr);
         let SellBalance = 0;
