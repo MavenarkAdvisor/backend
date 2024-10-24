@@ -119,7 +119,7 @@ app.post("/api/download", async (req, res) => {
       case "transaction":
         result = await transactionModel.find(
           {
-            SettlementDate: { $gte: from, $lte: to },
+            // SettlementDate: { $gte: from, $lte: to },
           },
           {
             _id: 0,
@@ -1144,7 +1144,7 @@ app.post("/api/subsecinfo", async (req, res) => {
             )
             .reduce((acc, itemV3) => acc + (itemV3.PurchaseValue || 0), 0); // Sum of PurchaseValue
 
-          const recalculatedAmortisation = FaceValue - totalPurchaseValue;
+          const recalculatedAmortisation = totalPurchaseValue - FaceValue;
           stockmasterV2[index].Amortisation = recalculatedAmortisation;
         }
 
@@ -2139,6 +2139,8 @@ app.post("/api/position", async (req, res) => {
   }
 });
 
+// app.post("/api/ledger", async (req, res) => {
+
 app.post("/api/ledger", async (req, res) => {
   try {
     // Fetch the required data
@@ -2195,9 +2197,9 @@ app.post("/api/ledger", async (req, res) => {
         StampDuty,
       } = itemV2;
 
-      // Calculate CapitalGainLoss from StockMasterV3
+      // Calculate CapitalGainLoss from StockMasterV2
       const CapitalGainLoss =
-        StockMasterV3.find(
+        StockMasterV2.find(
           (itemV3) =>
             itemV2.SecurityCode === itemV3.SecurityCode &&
             itemV2.ClientCode === itemV3.ClientCode
@@ -2219,47 +2221,47 @@ app.post("/api/ledger", async (req, res) => {
           switch (LedgerCode) {
             case "A1000":
               amount = -(
-                (FaceValue ?? 0) +
-                (Amortisation ?? 0) +
-                (InterestAccrued ?? 0) +
-                (StampDuty ?? 0) +
-                (Brokerage ?? 0) +
-                (TransactionCharges ?? 0) +
-                (TurnoverFees ?? 0) +
-                (ClearingCharges ?? 0) +
-                (GST ?? 0) +
-                (STT ?? 0)
+                FaceValue +
+                Amortisation +
+                InterestAccrued +
+                StampDuty +
+                Brokerage +
+                TransactionCharges +
+                TurnoverFees +
+                ClearingCharges +
+                GST +
+                STT
               );
               break;
             case "A1001":
-              amount = FaceValue;
+              amount = FaceValue.toFixed(2);
               break;
             case "A1003":
-              amount = Amortisation;
+              amount = Amortisation.toFixed(2);
               break;
             case "A1005":
-              amount = InterestAccrued;
+              amount = InterestAccrued.toFixed(2);
               break;
             case "A1009":
-              amount = StampDuty;
+              amount = StampDuty.toFixed(2);
               break;
             case "E1010":
-              amount = Brokerage;
+              amount = Brokerage.toFixed(2);
               break;
             case "E1011":
-              amount = TransactionCharges;
+              amount = TransactionCharges.toFixed(2);
               break;
             case "E1012":
-              amount = TurnoverFees;
+              amount = TurnoverFees.toFixed(2);
               break;
             case "E1013":
-              amount = ClearingCharges;
+              amount = ClearingCharges.toFixed(2);
               break;
             case "E1014":
-              amount = GST;
+              amount = GST.toFixed(2);
               break;
             case "E1015":
-              amount = STT;
+              amount = STT.toFixed(2);
               break;
             default:
               amount = null;
@@ -2268,16 +2270,17 @@ app.post("/api/ledger", async (req, res) => {
           switch (LedgerCode) {
             case "A1000":
               amount =
-                (FaceValue ?? 0) +
-                (Amortisation ?? 0) +
-                (InterestAccrued ?? 0) +
-                (StampDuty ?? 0) +
-                (Brokerage ?? 0) +
-                (TransactionCharges ?? 0) +
-                (TurnoverFees ?? 0) +
-                (ClearingCharges ?? 0) +
-                (GST ?? 0) +
-                (STT ?? 0);
+                FaceValue +
+                Amortisation +
+                InterestAccrued +
+                StampDuty +
+                Brokerage +
+                TransactionCharges +
+                TurnoverFees +
+                ClearingCharges +
+                GST +
+                STT +
+                CapitalGainLoss;
               break;
             case "A1001":
               amount = -FaceValue;
@@ -2321,7 +2324,8 @@ app.post("/api/ledger", async (req, res) => {
 
         amount = utils.getValueOrEmpty(amount);
 
-        if (amount !== null && amount !== undefined) {
+        // if (amount !== null && amount !== undefined) {
+        if (amount) {
           Ledger.push({
             EventType,
             LedgerCode,
@@ -2368,6 +2372,7 @@ app.post("/api/ledger", async (req, res) => {
     res.status(500).json({ status: false, message: error.message });
   }
 });
+
 
 app.post("/api/trialbalance", async (req, res) => {
   try {
